@@ -1,0 +1,52 @@
+1. Basic information
+Team number (e.g., 01) : 
+#1 Student ID : 
+#1 Student Name : 
+#2 Student ID : 
+#2 Student Name : 
+OS (bit) :
+gcc version :
+
+
+2. Meta-data page in an index file
+- Show your meta-data page of an index design if you have any. 
+
+
+3. Index Entry Format
+- Show your index entry design (structure). 
+
+
+4. Page Format
+- Show your internal-page (non-leaf node) design.
+
+- Show your leaf-page (leaf node) design.
+
+
+5. Implementation Detail
+- Have you added your own source file (.cc or .h)?
+
+- Have you implemented non-lazy deletion? Choose Yes or No: 
+
+- Have you implemented duplicated key handling that can span multiple pages? Choose Yes or No: 
+  If yes, please explain briefly how you have implemented this feature.
+
+- Other implementation details:
+
+
+6. Other (optional)
+- Freely use this section to tell us about things that are related to the project 3, but not related to the other sections (optional)
+
+Exit Numbers and their meaning:
+-1: RC==0 (method or function not implemented or unsuccessfully executed)
+-2: File size exception
+-3: malloc() failed (returned pointer is NULL)
+-4: Invalid ops on system Catalogs (Permission denied)
+-5: Failed in calling methods in RBFM layer from RM layer
+-6: Failed in calling methods in IXFileHandle from IXManager layer
+-7: Specified keyNum exceeds # of keys in an index page
+-8: freeSpace or keyOffset is not valid (less than 0 or exceeds PAGE_SIZE)
+-9: Invalid operation on leaf node
+-10: Invalid operation on internal node
+-11: Searched key not found
+
+
