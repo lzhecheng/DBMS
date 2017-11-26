@@ -173,15 +173,13 @@ RC RelationManager::insertAttr(const void* data, vector<Attribute>& attrs) {
 }
 
 
-//*****RelationManager*****
-
 RelationManager* RelationManager::instance()
 {
-//	if (!_rm)
-//		_rm = new RelationManager();
-//	return _rm;
-    static RelationManager _rm;
-    return &_rm;
+	//	if (!_rm)
+	//		_rm = new RelationManager();
+	//	return _rm;
+	static RelationManager _rm;
+	return &_rm;
 }
 
 RelationManager::RelationManager()
@@ -553,6 +551,7 @@ RC RelationManager::readAttribute(const string &tableName, const RID &rid, const
 	return 0;
 }
 
+
 RC RelationManager::scan(const string &tableName,
       const string &conditionAttribute,
       const CompOp compOp,                  
@@ -595,7 +594,25 @@ RC RelationManager::addAttribute(const string &tableName, const Attribute &attr)
     return -1;
 }
 
+RC RelationManager::createIndex(const string &tableName, const string &attributeName)
+{
+	return -1;
+}
 
+RC RelationManager::destroyIndex(const string &tableName, const string &attributeName)
+{
+	return -1;
+}
 
+RC RelationManager::indexScan(const string &tableName,
+                      const string &attributeName,
+                      const void *lowKey,
+                      const void *highKey,
+                      bool lowKeyInclusive,
+                      bool highKeyInclusive,
+                      RM_IndexScanIterator &rm_IndexScanIterator)
+{
+	return -1;
+}
 
 
