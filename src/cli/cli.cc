@@ -905,9 +905,9 @@ RC CLI::createIndex()
   if (this->checkAttribute(tableName, columnName, rid) == false)
     return error("Given tableName-columnName does not exist");
 
-  if (rm->createIndex(tableName, columnName) != 0) {
-	  return error("cannot create index on column(" + columnName + ") , ixManager error");
-  }
+//  if (rm->createIndex(tableName, columnName) != 0) {
+//	  return error("cannot create index on column(" + columnName + ") , ixManager error");
+//  }
 
   // add index to cli_indexes table
   if (this->addIndexToCatalog(tableName, columnName) != 0)
@@ -1114,7 +1114,7 @@ RC CLI::dropIndex(const string tableName, const string columnName, bool fromComm
   }
 
   // drop the index
-  rc = rm->destroyIndex(realTable, realColumn);
+//  rc = rm->destroyIndex(realTable, realColumn);
   if (rc != 0)
     return error("error while destroying index in ixManager");
 
@@ -1448,22 +1448,23 @@ RC CLI::printIndex() {
   tokenizer = next();
   string tableName = string(tokenizer);
 
-  RM_IndexScanIterator rmisi;
-  if (rm->indexScan(tableName, columnName, NULL, NULL, false, false, rmisi) != 0)
-	  return error("error in indexScan::printIndex");
+//  RM_IndexScanIterator rmisi;
+//  if (rm->indexScan(tableName, columnName, NULL, NULL, false, false, rmisi) != 0)
+//	  return error("error in indexScan::printIndex");
+//
+//  vector<string> outputBuffer;
+//  RID rid;
+//  char key[PAGE_SIZE];
+//
+//  outputBuffer.push_back("PageNum");
+//  outputBuffer.push_back("SlotNum");
+//  while (rmisi.getNextEntry(rid, key) == 0) {
+//    outputBuffer.push_back(to_string(rid.pageNum));
+//    outputBuffer.push_back(to_string(rid.slotNum));
+//  }
 
-  vector<string> outputBuffer;
-  RID rid;
-  char key[PAGE_SIZE];
-
-  outputBuffer.push_back("PageNum");
-  outputBuffer.push_back("SlotNum");
-  while (rmisi.getNextEntry(rid, key) == 0) {
-    outputBuffer.push_back(to_string(rid.pageNum));
-    outputBuffer.push_back(to_string(rid.slotNum));
-  }
-
-  return this->printOutputBuffer(outputBuffer, 2);
+  return 0;
+//  return this->printOutputBuffer(outputBuffer, 2);
 }
 
 // print every tuples in given tableName

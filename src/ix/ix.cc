@@ -1,5 +1,7 @@
 #include "ix.h"
 
+#include "ix.h"
+
 bool IndexManager::isEmpty(IXFileHandle& ixfh) {
 	if (ixfh.getNumberOfPages() == 0)
 		return true;
@@ -133,8 +135,9 @@ RC IndexManager::setPointer(int pageNum, int keyNum, void* page) {
 	RC rc = 0;
 	if (isLeaf(page))
 		return -9;
-	short totalOffset = getTotalOffset(page);
-	memcpy((char*) page + totalOffset - sizeof(int), &pageNum, sizeof(int));
+	short keyOffset = getKeyOffset(keyNum, page);
+	short keyLength = getKeyLength(keyNum, page);
+	memcpy((char*) page + keyOffset + keyLength, &pageNum, sizeof(int));
 
 	return rc;
 }
@@ -306,7 +309,7 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 					memcpy(newPage, page, sizeof(int));
 					memcpy((char*)newPage + sizeof(int), (char*)page + entryAfterOffset, entryAfterEndOffset - entryAfterOffset);
 					short entryAfterDirectoryOffset = PAGE_SIZE - sizeof(short) * (3 + 2 * numberOfKeys);
-					short entryAfterDirectoryEndOffset = entryAfterDirectoryOffset + sizeof(short) * 2 * (numberOfKeys - rid.slotNum);
+					short entryAfterDirectoryEndOffset = entryAfterDirectoryOffset + sizeof(short) * 2 * (shiftNumber);
 					memcpy((char*)newPage + PAGE_SIZE - sizeof(short) * (3 + 2 * shiftNumber), (char*)page + entryAfterDirectoryOffset, entryAfterDirectoryEndOffset - entryAfterDirectoryOffset);
 
 					setFlag(2, newPage);
@@ -324,7 +327,7 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 					ixfh.appendPage(newPage);
 
 					// deal with original page
-//					memset((char*)page + entryAfterOffset, 0, entryAfterDirectoryEndOffset - entryAfterOffset);
+					memset((char*)page + entryAfterOffset, 0, entryAfterDirectoryEndOffset - entryAfterOffset);
 					memcpy((char*)page + entryAfterOffset, pop.entry, pop.entryLength);
 					setNumberOfKeys(rid.slotNum + 1, page);
 					setLeftMostPointer(ixfh.pageNumber - 1, page);
@@ -334,7 +337,7 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 					ixfh.writePage(rid.pageNum, page);
 
 					// deal with newPop
-					memcpy((char*)entry, (char*)newPage + getKeyOffset(0, newPage), getKeyLength(0, newPage));
+					memcpy((char*)entry, (char*)newPage + sizeof(int), getKeyLength(0, newPage));
 					newPop.pid = ixfh.pageNumber - 1;
 					newPop.entry = entry;
 					newPop.entryLength = getKeyLength(0, newPage);
@@ -357,6 +360,7 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 					newPop.entry = entry;
 					memcpy((char*)entry, (char*)newPage + sizeof(int), pop.entryLength);
 					setLeftMostPointer(ixfh.pageNumber, page);
+					setFlag(2, page);
 
 					ixfh.writePage(rid.pageNum, page);
 					ixfh.appendPage(newPage);
@@ -457,9 +461,6 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 
 					// pop entryAfter
 					short entryAfterLength = getKeyLength(rid.slotNum, page);
-					void* entryAfter = malloc(entryAfterLength);
-					if (entryAfter == NULL) return -3;
-					memset(entryAfter, 0, entryAfterLength);
 					short entryAfterOffset = getKeyOffset(rid.slotNum, page);
 
 					// use tmp to hold the newPoped item
@@ -497,7 +498,7 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 					setNumberOfKeys(rid.slotNum + 1, page);
 					setFreeSpace(PAGE_SIZE - entryAfterOffset - pop.entryLength - sizeof(int) - sizeof(short) * (3 + 2 * (rid.slotNum + 1)), page);
 					setKeyLength(pop.entryLength, rid.slotNum, page);
-					setKeyOffset(entryAfterPlusOffset, rid.slotNum, page);
+					setKeyOffset(entryAfterOffset, rid.slotNum, page);
 					setPointer(pop.pid, rid.slotNum, page);
 					ixfh.writePage(rid.pageNum, page);
 
@@ -516,12 +517,12 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 
 					// deal with newPage
 					setLeftMostPointer(pop.pid, newPage);
-					memcpy((char*)newPage + sizeof(int), (char*)page + getKeyOffset(rid.slotNum, page), getKeyLength(rid.slotNum, page));
+					memcpy((char*)newPage + sizeof(int), (char*)page + getKeyOffset(rid.slotNum, page), getKeyLength(rid.slotNum, page) + sizeof(int));
 					setFlag(1, newPage);
 					setNumberOfKeys(1, newPage);
 					setFreeSpace(PAGE_SIZE - 2 * sizeof(int) - getKeyLength(rid.slotNum, page) - 5 * sizeof(short), newPage);
 					setKeyOffset(sizeof(int), 0, newPage);
-					setKeyLength(pop.entryLength, 0, newPage);
+					setKeyLength(getKeyLength(rid.slotNum, page), 0, newPage);
 					ixfh.appendPage(newPage);
 
 					// deal with original page
@@ -634,7 +635,7 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 					memcpy(newPage, page, sizeof(int));
 					memcpy((char*)newPage + sizeof(int), (char*)page + entryAfterOffset, entryAfterEndOffset - entryAfterOffset);
 					short entryAfterDirectoryOffset = PAGE_SIZE - sizeof(short) * (3 + 2 * numberOfKeys);
-					short entryAfterDirectoryEndOffset = entryAfterDirectoryOffset + sizeof(short) * 2 * (numberOfKeys - rid.slotNum);
+					short entryAfterDirectoryEndOffset = entryAfterDirectoryOffset + sizeof(short) * 2 * shiftNumber;
 					memcpy((char*)newPage + PAGE_SIZE - sizeof(short) * (3 + 2 * shiftNumber), (char*)page + entryAfterDirectoryOffset, entryAfterDirectoryEndOffset - entryAfterDirectoryOffset);
 
 					setFlag(2, newPage);
@@ -662,7 +663,7 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 					ixfh.writePage(rid.pageNum, page);
 
 					// deal with newPop
-					memcpy((char*)entry, (char*)newPage + getKeyOffset(0, newPage), getKeyLength(0, newPage));
+					memcpy((char*)entry, (char*)newPage + sizeof(int), getKeyLength(0, newPage));
 					newPop.pid = ixfh.pageNumber - 1;
 					newPop.entry = entry;
 					newPop.entryLength = getKeyLength(0, newPage);
@@ -723,6 +724,7 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 					setLeftMostPointer(ixfh.pageNumber - 1, page);
 					memset((char*)page + entryAfterOffset, 0, entryAfterLength + getFreeSpace(page) + 2 * sizeof(short));
 					setFreeSpace(getFreeSpace(page) + entryAfterLength + 2 * sizeof(short), page);
+					setNumberOfKeys(getNumberOfKeys(page) - 1, page);
 					ixfh.writePage(rid.pageNum, page);
 
 					// deal with newPop
@@ -784,7 +786,7 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 					short entryAfterPlusEndOffset = getTotalOffset(page);
 					memcpy((char*)newPage, (char*)page + entryAfterPlusOffset, entryAfterPlusEndOffset - entryAfterPlusOffset);
 					short entryAfterPlusDirectoryOffset = PAGE_SIZE - sizeof(short) * (3 + 2 * numberOfKeys);
-					short entryAfterDirectoryPlusEndOffset = entryAfterPlusDirectoryOffset + sizeof(short) * 2 * (numberOfKeys - rid.slotNum - 1);
+					short entryAfterDirectoryPlusEndOffset = entryAfterPlusDirectoryOffset + sizeof(short) * 2 * shiftNumber;
 					memcpy((char*)newPage + PAGE_SIZE - sizeof(short) * (3 + 2 * shiftNumber), (char*)page + entryAfterPlusDirectoryOffset, entryAfterDirectoryPlusEndOffset - entryAfterPlusDirectoryOffset);
 
 					setFlag(1, newPage);
@@ -818,6 +820,7 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 					newPop.entryLength = entryAfterLength;
 					pops.push_back(newPop);
 
+					free(tmp);
 					free(newPage);
 				}
 
@@ -826,12 +829,12 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 
 					// deal with newPage
 					setLeftMostPointer(pop.pid, newPage);
-					memcpy((char*)newPage + sizeof(int), (char*)page + getKeyOffset(rid.slotNum, page), getKeyLength(rid.slotNum, page));
+					memcpy((char*)newPage + sizeof(int), (char*)page + getKeyOffset(rid.slotNum, page), getKeyLength(rid.slotNum, page) + sizeof(int));
 					setFlag(1, newPage);
 					setNumberOfKeys(1, newPage);
 					setFreeSpace(PAGE_SIZE - 2 * sizeof(int) - getKeyLength(rid.slotNum, page) - 5 * sizeof(short), newPage);
 					setKeyOffset(sizeof(int), 0, newPage);
-					setKeyLength(pop.entryLength, 0, newPage);
+					setKeyLength(getKeyLength(rid.slotNum, page), 0, newPage);
 					ixfh.appendPage(newPage);
 
 					// deal with original page
@@ -1328,8 +1331,12 @@ RC IndexManager::deleteEntry(IXFileHandle &ixfileHandle, const Attribute &attrib
 	entryRid.pageNum = ixfileHandle.rootNum;
 	entryRid.slotNum = 0;
 	rc = searchExactEntry(ixfileHandle, entryRid.pageNum, entry, entryRid, entryLength);
-	if (rc != 0)
+	if (rc != 0) {
+		free(page);
+		free(entry);
 		return rc;
+
+	}
 	free(page);
 	free(entry);
 
