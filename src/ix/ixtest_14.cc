@@ -76,8 +76,8 @@ int testCase_14(const string &indexFileName,
     assert(rc == success && "indexManager::closeFile() should not fail.");
 
     // Destroy Index
-    rc = indexManager->destroyFile(indexFileName);
-    assert(rc == success && "indexManager::destroyFile() should not fail.");
+//    rc = indexManager->destroyFile(indexFileName);
+//    assert(rc == success && "indexManager::destroyFile() should not fail.");
 
     return success;
 

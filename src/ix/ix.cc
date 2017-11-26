@@ -1451,7 +1451,8 @@ int IndexManager::printBtreeHelper(unsigned currentNum, unsigned level, IXFileHa
 	unsigned offsetDirectory = PAGE_SIZE - 5 * sizeof(short);
 	if (attribute.type == TypeVarChar) {
 		// varchar
-		if(leafFlag == 1 || (leafFlag == 0 && ixfileHandle.pageNumber != 1)) {
+		// non-leaf
+		if(leafFlag == 1 || (leafFlag == 0 && ixfileHandle.pageNumber > 1)) {
 			int nextPage = *((int*)((char*)space));
 			nextPageArray[0] = nextPage;
 		}
@@ -1467,13 +1468,14 @@ int IndexManager::printBtreeHelper(unsigned currentNum, unsigned level, IXFileHa
 			rid_slot[i] = Other2string(0, *((unsigned*) ((char*) space + keyStart + keyLength + USSIZE)), 1, 1.0);
 			// deal with pointer, if it is a non-leaf
 			if(leafFlag == 1 || (leafFlag == 0 && ixfileHandle.pageNumber != 1)) {
-				nextPageArray[keyNumber] = *((unsigned*) ((char*) space + keyStart + keyLength + 2 * USSIZE));
+				nextPageArray[i + 1] = *((unsigned*) ((char*) space + keyStart + keyLength + 2 * USSIZE));
 			}
 			offsetDirectory -= 2 * sizeof(short);
 		}
 	} else if (attribute.type == TypeInt) {
 		// int
-		if(leafFlag == 1 || (leafFlag == 0 && ixfileHandle.pageNumber != 1)) {
+		// non-leaf
+		if(leafFlag == 1 || (leafFlag == 0 && ixfileHandle.pageNumber > 1)) {
 			int nextPage = *((int*)((char*)space));
 			nextPageArray[0] = nextPage;
 		}
@@ -1486,13 +1488,14 @@ int IndexManager::printBtreeHelper(unsigned currentNum, unsigned level, IXFileHa
 			rid_slot[i] = Other2string(0, *((unsigned*) ((char*) space + keyStart + 2 * USSIZE)), 1, 1.0);
 			// deal with pointer
 			if(leafFlag == 1 || (leafFlag == 0 && ixfileHandle.pageNumber != 1)) {
-				nextPageArray[keyNumber] = *((unsigned*) ((char*) space + keyStart + 3 * USSIZE));
+				nextPageArray[i + 1] = *((unsigned*) ((char*) space + keyStart + 3 * USSIZE));
 			}
 			offsetDirectory -= 2 * sizeof(short);
 		}
 	} else {
 		// real
-		if(leafFlag == 1 || (leafFlag == 0 && ixfileHandle.pageNumber != 1)) {
+		// non-leaf
+		if(leafFlag == 1 || (leafFlag == 0 && ixfileHandle.pageNumber > 1)) {
 			int nextPage = *((int*)((char*)space));
 			nextPageArray[0] = nextPage;
 		}
@@ -1505,7 +1508,7 @@ int IndexManager::printBtreeHelper(unsigned currentNum, unsigned level, IXFileHa
 			rid_slot[i] = Other2string(0, *((unsigned*) ((char*) space + keyStart + 2 * USSIZE)), 1, 1.0);
 			// deal with pointer
 			if(leafFlag == 1 || (leafFlag == 0 && ixfileHandle.pageNumber != 1)) {
-				nextPageArray[keyNumber] = *((unsigned*) ((char*) space + keyStart + 3 * USSIZE));
+				nextPageArray[i + 1] = *((unsigned*) ((char*) space + keyStart + 3 * USSIZE));
 			}
 			offsetDirectory -= 2 * sizeof(short);
 		}
@@ -1517,7 +1520,7 @@ int IndexManager::printBtreeHelper(unsigned currentNum, unsigned level, IXFileHa
 	for (int i = 0; i < level; i++) {
 		indent += "\t";
 	}
-	if ((leafFlag == 0 && ixfileHandle.pageNumber != 1) || leafFlag == 1) {
+	if ((leafFlag == 0 && ixfileHandle.pageNumber > 1) || leafFlag == 1) {
 		// non-leaf
 		// key line
 		string keyLine = indent + "{\"keys\":[";
@@ -1537,9 +1540,7 @@ int IndexManager::printBtreeHelper(unsigned currentNum, unsigned level, IXFileHa
 		// children
 		for (int i = 0; i < keyNumber; i++) {
 			rc = printBtreeHelper(nextPageArray[i], level + 1, ixfileHandle, attribute);
-			if(rc == 0) {
-				cout << "," << endl;
-			}
+			cout << "," << endl;
 		}
 		printBtreeHelper(nextPageArray[keyNumber], level + 1, ixfileHandle, attribute);
 
