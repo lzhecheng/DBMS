@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../rbf/rbfm.h"
+#include "../ix/ix.h"
 
 using namespace std;
 
@@ -21,7 +22,6 @@ public:
   RC getNextTuple(RID &rid, void *data);
   RC close();
   RBFM_ScanIterator rbfm_ScanIterator;
-//  FileHandle *fh;
 };
 
 
@@ -32,8 +32,9 @@ class RM_IndexScanIterator {
   ~RM_IndexScanIterator() {}; 	// Destructor
 
   // "key" follows the same format as in IndexManager::insertEntry()
-  RC getNextEntry(RID &rid, void *key) {};  	// Get next matching entry
-  RC close() {};             			// Terminate index scan
+  RC getNextEntry(RID &rid, void *key);  	// Get next matching entry
+  RC close();             			// Terminate index scan
+  IX_ScanIterator ix_ScanIterator;
 };
 
 
@@ -90,7 +91,6 @@ public:
                         RM_IndexScanIterator &rm_IndexScanIterator);
 
 // Extra credit work (10 points)
-public:
   RC addAttribute(const string &tableName, const Attribute &attr);
 
   RC dropAttribute(const string &tableName, const string &attributeName);
@@ -110,13 +110,17 @@ public:
   RC insertAttr(const void* data, vector<Attribute>& attrs);
 
 
-protected:
+  void createIndexName(string& indexName, const string &tableName, const string &attributeName);
+  bool hasIndex(RelationManager rm, const string& tableName, const string& attrName);
+
+
   RelationManager();
   ~RelationManager();
 
 private:
-  //  static RelationManager* _rm;
-    RecordBasedFileManager* rbfm;
+    static RelationManager* _rm;
+    RecordBasedFileManager rbfm;
+    IndexManager ixm;
 };
 
 #endif

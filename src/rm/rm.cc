@@ -117,7 +117,7 @@ void RelationManager::createRD(const string& tableName, vector<Attribute>& RD) {
 RC RelationManager::insertTupleNoCheck(FileHandle& fh, const string& tableName, const void* data1, RID& rid) {
 	vector<Attribute> RD;
 	getAttributes(tableName, RD);
-	RC rc = rbfm->insertRecord(fh, RD, data1, rid);
+	RC rc = rbfm.insertRecord(fh, RD, data1, rid);
 	return rc;
 }
 
@@ -125,7 +125,7 @@ RC RelationManager::insertTupleNoCheck(FileHandle& fh, const string& tableName, 
 RC RelationManager::updateTupleNoCheck(FileHandle& fh, const string& tableName, const void* data2, const RID& rid) {
     vector<Attribute> RD;
     getAttributes(tableName, RD);
-    RC rc = rbfm->updateRecord(fh, RD, data2, rid);
+    RC rc = rbfm.updateRecord(fh, RD, data2, rid);
     return rc;
 
 }
@@ -133,7 +133,7 @@ RC RelationManager::updateTupleNoCheck(FileHandle& fh, const string& tableName, 
 RC RelationManager::deleteTupleNoCheck(FileHandle& fh, const string& tableName, const RID& rid) {
     vector<Attribute> RD;
     getAttributes(tableName, RD);
-    RC rc = rbfm->deleteRecord(fh, RD, rid);
+    RC rc = rbfm.deleteRecord(fh, RD, rid);
     return rc;
 
 }
@@ -173,37 +173,83 @@ RC RelationManager::insertAttr(const void* data, vector<Attribute>& attrs) {
 }
 
 
+void RelationManager::createIndexName(string& indexName, const string &tableName, const string &attributeName) {
+	indexName = "Index_" + tableName + "_" + attributeName;
+}
+
+
+bool RelationManager::hasIndex(RelationManager rm, const string& tableName, const string& attrName) {
+	RC rc;
+	string indexName;
+	createIndexName(indexName, tableName, attrName);
+
+	// search "Tables" to see if index file exists
+	vector<string> RD_id;
+	RID rid;
+	RM_ScanIterator rm_ScanIterator;
+	createRD_id(RD_id);
+	int length = indexName.length();
+	void* name = malloc(length + 4);
+	if (name == NULL) cerr << "malloc() failed" << endl;
+	memset(name, 0, length + 4);
+	memcpy(name, &length, sizeof(int));
+	const char *cstr = indexName.c_str();
+	for(int i = 0; i < length; i++)
+	{
+		memcpy((char*)name + sizeof(int) + i, (char*)cstr + i, 1);
+	}
+	rc = rm.scan("Tables", "table-name", EQ_OP, name, RD_id, rm_ScanIterator);
+	if (rc != 0) cerr << "scan() failed" << endl;
+
+	void* data = malloc(PAGE_SIZE);
+	if (data == NULL) cerr << "malloc() failed" << endl;
+	memset(data, 0, PAGE_SIZE);
+	rc = rm_ScanIterator.getNextTuple(rid, data);
+	if (rc == 0) {
+		rm_ScanIterator.close();
+		free(data);
+		free(name);
+		return true;
+	}
+
+	rm_ScanIterator.close();
+	free(data);
+	free(name);
+	return false;
+}
+
+RelationManager* RelationManager::_rm = 0;
+
 RelationManager* RelationManager::instance()
 {
-	//	if (!_rm)
-	//		_rm = new RelationManager();
-	//	return _rm;
-	static RelationManager _rm;
-	return &_rm;
+	if (!_rm)
+		_rm = new RelationManager();
+	return _rm;
 }
 
 RelationManager::RelationManager()
 {
-	rbfm = new RecordBasedFileManager();
+
 }
 
 RelationManager::~RelationManager()
 {
+
 }
 
 RC RelationManager::createCatalog()
 {
 	RC rc;
 	// Create two elementary tables, use fh1 and fh2 to handle Table and Columns respectively.
-	rc = rbfm->createFile("Tables");
+	rc = rbfm.createFile("Tables");
 	if (rc != 0) return -5;
-    rc = rbfm->createFile("Columns");
+    rc = rbfm.createFile("Columns");
 	if (rc != 0) return -5;
     FileHandle fh1;
     FileHandle fh2;
-    rc = rbfm->openFile("Tables", fh1);
+    rc = rbfm.openFile("Tables", fh1);
 	if (rc != 0) return -5;
-    rc = rbfm->openFile("Columns", fh2);
+    rc = rbfm.openFile("Columns", fh2);
 	if (rc != 0) return -5;
 
 
@@ -217,6 +263,8 @@ RC RelationManager::createCatalog()
     void* data1 = malloc(120);
     void* data2 = malloc(80);
     if (data1 == NULL || data2 == NULL) return -3;
+    memset(data1, 0, 120);
+    memset(data2, 0, 80);
 
     createData4Tables(1, "Tables", "Tables", data1);
     rc = insertTupleNoCheck(fh1, "Tables", data1, rid);
@@ -257,9 +305,9 @@ RC RelationManager::createCatalog()
 	free(data1);
 	free(data2);
 
-	rc = rbfm->closeFile(fh1);
+	rc = rbfm.closeFile(fh1);
 	if (rc != 0) return -5;
-	rc = rbfm->closeFile(fh2);
+	rc = rbfm.closeFile(fh2);
 	if (rc != 0) return -5;
 	return 0;
 }
@@ -268,10 +316,9 @@ RC RelationManager::deleteCatalog()
 {
 	RC rc;
 
-    rc = rbfm->destroyFile("Tables");
+    rc = rbfm.destroyFile("Tables");
     if (rc != 0) return -5;
-    rc = rbfm->destroyFile("Columns");
-
+    rc = rbfm.destroyFile("Columns");
     if (rc != 0) return -5;
 
 	return 0;
@@ -281,19 +328,20 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
 {
 	RC rc;
 	if (!validTable(tableName)) return -4;
-	rc = rbfm->createFile(tableName);
+	rc = rbfm.createFile(tableName);
 	if (rc != 0) return -5;
     FileHandle fh1;
     FileHandle fh2;
-    rc = rbfm->openFile("Tables", fh1);
+    rc = rbfm.openFile("Tables", fh1);
     if (rc != 0) return -5;
-    rc = rbfm->openFile("Columns", fh2);
+    rc = rbfm.openFile("Columns", fh2);
     if (rc != 0) return -5;
 
     // Get nextTableId
     int tid;
     void* data = malloc(PAGE_SIZE);
     if (data == NULL) return -3;
+    memset(data, 0, PAGE_SIZE);
     RID rid; rid.pageNum = rid.slotNum = 0;
     rc = readAttribute("Columns", rid, "column-position", data);
     if (rc != 0) return -5;
@@ -303,6 +351,8 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     void* data1 = malloc(120);
     void* data2 = malloc(80);
     if (data1 == NULL || data2 == NULL) return -3;
+    memset(data1, 0, 120);
+    memset(data2, 0, 80);
     createData4Tables(tid, tableName, tableName, data1);
     RID rid1, rid2;
     rc = insertTupleNoCheck(fh1, "Tables", data1, rid1);
@@ -322,9 +372,9 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     free(data);
     free(data1);
     free(data2);
-    rc = rbfm->closeFile(fh1);
+    rc = rbfm.closeFile(fh1);
     if (rc != 0) return -5;
-    rc = rbfm->closeFile(fh2);
+    rc = rbfm.closeFile(fh2);
     if (rc != 0) return -5;
 	return 0;
 }
@@ -334,7 +384,7 @@ RC RelationManager::deleteTable(const string &tableName)
 	RC rc;
 	// Check tableName in case of deleting "Tables" or "Columns", tid won't decrease
 	if (!validTable(tableName)) return -4;
-	rc = rbfm->destroyFile(tableName);
+	rc = rbfm.destroyFile(tableName);
 	if (rc != 0) return -5;
 
 	vector<string> RD_id, RD_column;
@@ -347,8 +397,9 @@ RC RelationManager::deleteTable(const string &tableName)
 	int length = tableName.size();
 	void* name = malloc(length + 4);
 	if (name == NULL) return -3;
+	memset(name, 0, length + 4);
 	memcpy(name, &length, sizeof(int));
-	int offset = 4;
+	int offset = sizeof(int);
 	const char *cstr = tableName.c_str();
 	for(int i = 0; i < length; i++)
 	{
@@ -360,6 +411,7 @@ RC RelationManager::deleteTable(const string &tableName)
 	setZero(rid);
 	void* data = malloc(PAGE_SIZE);
 	if (data == NULL) return -3;
+	memset(data, 0, PAGE_SIZE);
 	rc = rm_ScanIterator.getNextTuple(rid, data);
 	if (rc != 0) return -5;
 	memcpy(&tid, (char*)data+1, sizeof(int));
@@ -368,11 +420,11 @@ RC RelationManager::deleteTable(const string &tableName)
 
 	// Delete tuple in "Tables"
 	FileHandle fh;
-	rc = rbfm->openFile("Tables", fh);
+	rc = rbfm.openFile("Tables", fh);
 	if (rc != 0) return -5;
 	rc = deleteTupleNoCheck(fh, "Tables", rid);
 	if (rc != 0) return -5;
-	rc = rbfm->closeFile(fh);
+	rc = rbfm.closeFile(fh);
 	if (rc != 0) return -5;
 
 	// Collect rids from "Columns" using tid
@@ -391,11 +443,11 @@ RC RelationManager::deleteTable(const string &tableName)
 	for (int i = 0; i < rids.size(); i++) {
 		FileHandle fh;
 		rid = rids[i];
-		rc = rbfm->openFile("Columns", fh);
+		rc = rbfm.openFile("Columns", fh);
 		if (rc != 0) return -5;
 		rc = deleteTupleNoCheck(fh, "Columns", rid);
 		if (rc != 0) return -5;
-		rc = rbfm->closeFile(fh);
+		rc = rbfm.closeFile(fh);
 		if (rc != 0) return -5;
 	}
 
@@ -423,6 +475,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
 	int length = tableName.size();
 	void* name = malloc(length + 4);
 	if (name == NULL) return -3;
+	memset(name, 0, length + 4);
 	memcpy(name, &length, sizeof(int));
 	int offset = 4;
 	const char *cstr = tableName.c_str();
@@ -440,6 +493,7 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
 	setZero(rid);
 	void* data = malloc(PAGE_SIZE);
 	if (data == NULL) return -3;
+	memset(data, 0, PAGE_SIZE);
 	rc = rm_ScanIterator.getNextTuple(rid, data);
 	if (rc != 0) {
 		free(data);
@@ -470,13 +524,57 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
 {
 	RC rc;
 	FileHandle fh;
-	rc = rbfm->openFile(tableName, fh);
+
+	// deal with heap file
+	rc = rbfm.openFile(tableName, fh);
 	if (rc != 0) return -5;
 	if (!validTable(tableName)) return -4;
     rc = insertTupleNoCheck(fh, tableName, data, rid);
     if (rc != 0) return -5;
-    rc = rbfm->closeFile(fh);
+    rc = rbfm.closeFile(fh);
     if (rc != 0) return -5;
+
+    // deal with index file (if exists)
+    vector<Attribute> attrs;
+    Attribute attr;
+    IXFileHandle ixfh;
+    RelationManager rm;
+    string indexName;
+
+    void* key = malloc(PAGE_SIZE);
+    if (key == NULL) return -12;
+    memset(key, 0, PAGE_SIZE);
+    rc = getAttributes(tableName, attrs);
+    if (rc != 0) return -12;
+    int length = 0, nullOffset = 0, dataOffset = attrs.size() / 8 + 1;
+    for (int i = 0; i < attrs.size(); i++) {
+    	attr = attrs[i];
+    	createIndexName(indexName, tableName, attr.name);
+    	nullOffset = i / 8;
+    	char nullByte;
+    	memcpy(&nullByte, (char*)data + nullOffset, 1);
+    	if ((nullByte & (1 << (7 - i % 8))) == 0) {
+    		if (attr.type == TypeVarChar) {
+    			memcpy(&length, (char*)data + dataOffset, sizeof(int));
+    			memcpy(key, (char*)data + dataOffset, length + sizeof(int));
+    			dataOffset += sizeof(int) + length;
+    		} else if (attr.type == TypeInt) {
+    			memcpy(key, (char*)data + dataOffset, sizeof(int));
+    			dataOffset += sizeof(int);
+    		} else if (attr.type == TypeReal) {
+    			memcpy(key, (char*)data + dataOffset, sizeof(float));
+    			dataOffset += sizeof(float);
+    		}
+
+    		if (hasIndex(rm, tableName, attr.name)) {
+    			ixm.openFile(indexName, ixfh);
+    			ixm.insertEntry(ixfh, attr, key, rid);
+    			ixm.closeFile(ixfh);
+    		}
+    	}
+    }
+
+    free(key);
 	return 0;
 }
 
@@ -484,12 +582,12 @@ RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
 {
 	RC rc;
 	FileHandle fh;
-	rc = rbfm->openFile(tableName, fh);
+	rc = rbfm.openFile(tableName, fh);
 	if (rc != 0) return -5;
 	if (!validTable(tableName)) return -4;
 	rc = deleteTupleNoCheck(fh, tableName, rid);
 	if (rc != 0) return -6;
-    rc = rbfm->closeFile(fh);
+    rc = rbfm.closeFile(fh);
     if (rc != 0) return -7;
     return 0;
 }
@@ -498,12 +596,12 @@ RC RelationManager::updateTuple(const string &tableName, const void *data, const
 {
 	RC rc;
 	FileHandle fh;
-	rc = rbfm->openFile(tableName, fh);
+	rc = rbfm.openFile(tableName, fh);
 	if (rc != 0) return -5;
 	if (!validTable(tableName)) return -4;
     rc = updateTupleNoCheck(fh, tableName, data, rid);
     if (rc != 0) return -5;
-    rc = rbfm->closeFile(fh);
+    rc = rbfm.closeFile(fh);
     if (rc != 0) return -5;
     return 0;
 }
@@ -512,18 +610,18 @@ RC RelationManager::readTuple(const string &tableName, const RID &rid, void *dat
 {
 	RC rc;
     FileHandle fh;
-    rc = rbfm->openFile(tableName, fh);
+    rc = rbfm.openFile(tableName, fh);
     if (rc != 0) return -5;
 
     // Get recordDescriptor RD
     vector<Attribute> RD;
     getAttributes(tableName, RD);
-    rc = rbfm->readRecord(fh, RD, rid, data);
+    rc = rbfm.readRecord(fh, RD, rid, data);
     if (rc != 0) {
-    	rbfm->closeFile(fh);
+    	rbfm.closeFile(fh);
     	return -5;
     }
-	rc = rbfm->closeFile(fh);
+	rc = rbfm.closeFile(fh);
 	if (rc != 0) return -5;
 	return 0;
 }
@@ -531,7 +629,7 @@ RC RelationManager::readTuple(const string &tableName, const RID &rid, void *dat
 RC RelationManager::printTuple(const vector<Attribute> &attrs, const void *data)
 {
 	RC rc;
-	rc = rbfm->printRecord(attrs, data);
+	rc = rbfm.printRecord(attrs, data);
 	if (rc != 0) return -5;
 	return 0;
 }
@@ -540,13 +638,13 @@ RC RelationManager::readAttribute(const string &tableName, const RID &rid, const
 {
 	RC rc;
     FileHandle fh;
-    rc = rbfm->openFile(tableName, fh);
+    rc = rbfm.openFile(tableName, fh);
     if (rc != 0) return -5;
     vector<Attribute> RD;
     getAttributes(tableName, RD);
-	rc = rbfm->readAttribute(fh, RD, rid, attributeName, data);
+	rc = rbfm.readAttribute(fh, RD, rid, attributeName, data);
 	if (rc != 0) return -5;
-	rc = rbfm->closeFile(fh);
+	rc = rbfm.closeFile(fh);
 	if (rc != 0) return -5;
 	return 0;
 }
@@ -561,11 +659,11 @@ RC RelationManager::scan(const string &tableName,
 {
 	RC rc;
     FileHandle fh;
-    rc = rbfm->openFile(tableName, fh);
+    rc = rbfm.openFile(tableName, fh);
     if (rc != 0) return -5;
     vector<Attribute> RD;
     getAttributes(tableName, RD);
-    rc = rbfm->scan(fh, RD, conditionAttribute, compOp, value, attributeNames, rm_ScanIterator.rbfm_ScanIterator);
+    rc = rbfm.scan(fh, RD, conditionAttribute, compOp, value, attributeNames, rm_ScanIterator.rbfm_ScanIterator);
     if (rc != 0) return -5;
 	return 0;
 }
@@ -581,6 +679,19 @@ RC RM_ScanIterator::close() {
 	return rc;
 }
 
+RC RM_IndexScanIterator::getNextEntry(RID &rid, void *key) {
+	RC rc = ix_ScanIterator.getNextEntry(rid, key);
+	return rc;
+}
+
+
+RC RM_IndexScanIterator::close() {
+	RC rc = ix_ScanIterator.close();
+	return 0;
+}
+
+
+
 
 // Extra credit work
 RC RelationManager::dropAttribute(const string &tableName, const string &attributeName)
@@ -594,14 +705,145 @@ RC RelationManager::addAttribute(const string &tableName, const Attribute &attr)
     return -1;
 }
 
-RC RelationManager::createIndex(const string &tableName, const string &attributeName)
+RC RelationManager::createIndex(const string &tableName, const string &attrName)
 {
-	return -1;
+	RC rc;
+
+	// get indexName
+	string indexName;
+	createIndexName(indexName, tableName, attrName);
+
+	// create index file
+	rc = ixm.createFile(indexName);
+	if (rc != 0) return -12;
+
+	// get tid, update "Tables" and "Columns"
+    int tid;
+    void* data = malloc(PAGE_SIZE);
+    if (data == NULL) return -3;
+    memset(data, 0, PAGE_SIZE);
+    RID rid;
+    setZero(rid);
+    rc = readAttribute("Columns", rid, "column-position", data);
+    if (rc != 0) return -5;
+    memcpy(&tid, (char*)data + 1, sizeof(int));
+
+    FileHandle fh1, fh2;
+    rc = rbfm.openFile("Tables", fh1);
+	if (rc != 0) return -5;
+    rc = rbfm.openFile("Columns", fh2);
+	if (rc != 0) return -5;
+
+    void* data1 = malloc(120);
+    void* data2 = malloc(80);
+    if (data1 == NULL || data2 == NULL) return -3;
+    memset(data1, 0, 120);
+    memset(data2, 0, 80);
+    createData4Tables(tid, indexName, indexName, data1);
+    RID rid1;
+    rc = insertTupleNoCheck(fh1, "Tables", data1, rid1);
+    if (rc != 0) return -5;
+
+    tid++;
+    createData4Columns(0, "nextTableId", TypeInt, 4, tid, data2);
+    rc = updateTupleNoCheck(fh2, "Columns", data2, rid);
+    if (rc != 0) return -5;
+
+    free(data);
+    free(data1);
+    free(data2);
+
+    // scan existing tuples of the table and insert keys into newly created index file
+    RM_ScanIterator rm_ScanIterator;
+    IXFileHandle ixfh;
+    void* key = malloc(PAGE_SIZE);
+    if (key == NULL) return -12;
+    memset(key, 0, PAGE_SIZE);
+    void* entry = malloc(PAGE_SIZE);
+    if (entry == NULL) return -12;
+    memset(entry, 0, PAGE_SIZE);
+
+
+    vector<Attribute> attrs;
+    Attribute attr;
+    RelationManager rm;
+    vector<string> attrNames;
+    attrNames.push_back(attrName);
+    rc = getAttributes(tableName, attrs);
+    for (int i = 0; i < attrs.size(); i++) {
+    	attr = attrs[i];
+    	if (attr.name == attrName)
+    		break;
+    }
+    ixm.openFile(indexName, ixfh);
+    rc = rm.scan(tableName, attrName, NO_OP, NULL, attrNames, rm_ScanIterator);
+    if (rc != 0) return -12;
+    setZero(rid);
+    while (rm_ScanIterator.getNextTuple(rid, entry) != RM_EOF) {
+    	memcpy(key, (char*)entry + 1, PAGE_SIZE - 1);
+    	ixm.insertEntry(ixfh, attr, key, rid);
+    }
+
+    ixm.closeFile(ixfh);
+    free(entry);
+    free(key);
+	return 0;
 }
 
 RC RelationManager::destroyIndex(const string &tableName, const string &attributeName)
 {
-	return -1;
+	RC rc;
+
+	// get indexName
+	string indexName;
+	createIndexName(indexName, tableName, attributeName);
+
+	// destroy index file
+	rc = ixm.destroyFile(indexName);
+	if (rc != 0) return -12;
+
+	// update Catalogs
+	RM_ScanIterator rm_ScanIterator;
+	vector<string> RD_id;
+	createRD_id(RD_id);
+	int length = indexName.size();
+	void* name = malloc(length + 4);
+	if (name == NULL) return -3;
+	memset(name, 0, length + 4);
+	memcpy(name, &length, sizeof(int));
+	int offset = 4;
+	const char *cstr = indexName.c_str();
+	for(int i = 0; i < length; i++)
+	{
+		memcpy((char*)name + offset + i, (char*)cstr + i, 1);
+	}
+
+	rc = scan("Tables", "table-name", EQ_OP, name, RD_id, rm_ScanIterator);
+	if (rc != 0) return -5;
+
+	RID rid;
+	setZero(rid);
+	void* data = malloc(PAGE_SIZE);
+	if (data == NULL) return -3;
+	memset(data, 0, PAGE_SIZE);
+	rc = rm_ScanIterator.getNextTuple(rid, data);
+	if (rc != 0) return -5;
+	rm_ScanIterator.close();
+
+	// Delete tuple in "Tables"
+	FileHandle fh;
+	rc = rbfm.openFile("Tables", fh);
+	if (rc != 0) return -5;
+	rc = deleteTupleNoCheck(fh, "Tables", rid);
+	if (rc != 0) return -5;
+	rc = rbfm.closeFile(fh);
+	if (rc != 0) return -5;
+
+
+	free(name);
+	free(data);
+
+	return 0;
 }
 
 RC RelationManager::indexScan(const string &tableName,
@@ -612,7 +854,27 @@ RC RelationManager::indexScan(const string &tableName,
                       bool highKeyInclusive,
                       RM_IndexScanIterator &rm_IndexScanIterator)
 {
-	return -1;
+	RC rc;
+	string indexName;
+	createIndexName(indexName, tableName, attributeName);
+
+	vector<Attribute> attrs;
+	Attribute attr;
+	rc = getAttributes(tableName, attrs);
+	if (rc != 0) return -12;
+	for (int i = 0; i < attrs.size(); i++) {
+		attr = attrs[i];
+		if (attr.name == attributeName)
+			break;
+	}
+
+	IXFileHandle ixfh;
+	rc = ixm.openFile(indexName, ixfh);
+	if (rc != 0) return -12;
+	rc = ixm.scan(ixfh, attr, lowKey, highKey, lowKeyInclusive, highKeyInclusive, rm_IndexScanIterator.ix_ScanIterator);
+	if (rc != 0) return -12;
+
+	return rc;
 }
 
 
