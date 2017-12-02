@@ -39,6 +39,8 @@ class Iterator {
         virtual RC getNextTuple(void *data) = 0;
         virtual void getAttributes(vector<Attribute> &attrs) const = 0;
         virtual ~Iterator() {};
+
+        RC getOneAttr(vector<Attribute> attrs, void *data, void *target, string attr, AttrType &type, int &length);
 };
 
 
@@ -198,9 +200,18 @@ class Filter : public Iterator {
         );
         ~Filter(){};
 
-        RC getNextTuple(void *data) {return QE_EOF;};
+        RC getNextTuple(void *data);
         // For attribute in vector<Attribute>, name it as rel.attr
-        void getAttributes(vector<Attribute> &attrs) const{};
+        void getAttributes(vector<Attribute> &attrs) const;
+
+    private:
+        Iterator *input;
+        Condition condition;
+        AttrType type;
+
+        bool isValid(void *data);
+        bool compareValue(void *left, int leftLength, void *right, int rightLength, AttrType type);
+        RC prepareRightValue(Value value, void *right, int &rightLength);
 };
 
 
@@ -208,12 +219,16 @@ class Project : public Iterator {
     // Projection operator
     public:
         Project(Iterator *input,                    // Iterator of input R
-              const vector<string> &attrNames){};   // vector containing attribute names
+              const vector<string> &attrNames);   // vector containing attribute names
         ~Project(){};
 
-        RC getNextTuple(void *data) {return QE_EOF;};
+        RC getNextTuple(void *data);
         // For attribute in vector<Attribute>, name it as rel.attr
         void getAttributes(vector<Attribute> &attrs) const{};
+
+    private:
+        Iterator *input;
+        vector<string> attrNames;
 };
 
 class BNLJoin : public Iterator {
