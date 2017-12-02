@@ -224,11 +224,16 @@ class Project : public Iterator {
 
         RC getNextTuple(void *data);
         // For attribute in vector<Attribute>, name it as rel.attr
-        void getAttributes(vector<Attribute> &attrs) const{};
+        void getAttributes(vector<Attribute> &attrs) const;
 
     private:
         Iterator *input;
         vector<string> attrNames;
+        vector<Attribute> projectedAttrs;
+        vector<Attribute> allAttrs;
+
+        void getTargetAttrs();
+        RC pickAttrs(void *data);
 };
 
 class BNLJoin : public Iterator {

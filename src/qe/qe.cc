@@ -11,7 +11,7 @@ RC Iterator::getOneAttr(vector<Attribute> attrs, void *data, void *target, strin
 	int offset = nullFieldsIndicatorActualSize;
 	vector<Attribute>::iterator iter;
 	for(iter = attrs.begin(); iter != attrs.end(); iter++) {
-		bool isNull = nullFieldsIndicator[i / 8] & (0 << (7 - i % 8));
+		bool isNull = nullFieldsIndicator[i / 8] & (1 << (7 - i % 8));
 		if(!isNull) {
 			// not null
 			type = (*iter).type;
@@ -44,7 +44,7 @@ RC Iterator::getOneAttr(vector<Attribute> attrs, void *data, void *target, strin
 	return rc;
 }
 
-
+// *****Filter starts here*****
 Filter::Filter(Iterator* input, const Condition &condition) {
 	this->input = input;
 	this->condition = condition;
@@ -182,12 +182,99 @@ void Filter::getAttributes(vector<Attribute> &attrs) const {
 	input->getAttributes(attrs);
 }
 
-//Project::Project(Iterator *input, const vector<string> &attrNames) {
-//	iter = input;
-//	this->attrNames = attrNames;
-//}
-//
-//RC Project::getNextTuple(void *data) {
-//	RC rc = 0;
-//	return rc;
-//}
+// *****Project starts here*****
+Project::Project(Iterator *input, const vector<string> &attrNames) {
+	this->input = input;
+	this->attrNames = attrNames;
+	input->getAttributes(allAttrs);
+	getTargetAttrs();
+}
+
+RC Project::getNextTuple(void *data) {
+	RC rc = 0;
+	rc = input->getNextTuple(data);
+	if(rc != QE_EOF) {
+		pickAttrs(data);
+	}
+
+	return rc;
+}
+
+void Project::getAttributes(vector<Attribute> &attrs) const {
+	attrs.clear();
+	attrs = projectedAttrs;
+}
+
+void Project::getTargetAttrs() {
+	vector<Attribute>::iterator iterAttr;
+	vector<string>::iterator iterAttrName;
+	// find all projected attributes
+	for(iterAttrName = attrNames.begin(); iterAttrName != attrNames.end(); iterAttrName++) {
+		for(iterAttr = allAttrs.begin(); iterAttr != allAttrs.end(); iterAttr++) {
+			if((*iterAttr).name == *iterAttrName) {
+				projectedAttrs.push_back(*iterAttr);
+				break;
+			}
+		}
+	}
+}
+
+RC Project::pickAttrs(void *data) {
+	RC rc = 0;
+	// null-indicator for data
+	int nullFieldsIndicatorActualSizeData = ceil((double)allAttrs.size() / CHAR_BIT);
+	unsigned char *nullFieldsIndicatorData = (unsigned char *)malloc(nullFieldsIndicatorActualSizeData);
+	memcpy(nullFieldsIndicatorData, data, nullFieldsIndicatorActualSizeData);
+	// null-indicator for space
+	int nullFieldsIndicatorActualSizeSpace = ceil((double)projectedAttrs.size() / CHAR_BIT);
+	unsigned char *nullFieldsIndicatorSpace = (unsigned char *)malloc(nullFieldsIndicatorActualSizeSpace);
+	memset(nullFieldsIndicatorSpace, 0, nullFieldsIndicatorActualSizeSpace);
+
+	void *space = malloc(PAGE_SIZE);
+	int spaceOffset = nullFieldsIndicatorActualSizeSpace;
+	int dataOffset = nullFieldsIndicatorActualSizeData;
+
+	for(int i = 0; i < allAttrs.size(); i++) {
+		// check if this attribute should be projected
+		bool isOneProjectedAttrs = false;
+		for(int j = 0; j < projectedAttrs.size(); j++) {
+			if(allAttrs.at(i).name == projectedAttrs.at(j).name) {
+				isOneProjectedAttrs = true;
+				break;
+			}
+		}
+
+		bool isNull = nullFieldsIndicatorData[i / 8] & (1 << (7 - i % 8));
+		int length = 0;
+		if(!isNull) {
+			length = allAttrs.at(i).type == TypeVarChar ? *((int*)((char*)data + dataOffset)) + sizeof(int): sizeof(int);
+		} else {
+			length = 0;
+		}
+		if(!isOneProjectedAttrs) {
+			// not a projected attribute
+			if(!isNull) {
+				// not null
+				dataOffset += length;
+			}
+		} else {
+			// a projected attribute
+			if(!isNull) {
+				// not null
+				memcpy((char*)space + spaceOffset, (char*)data + dataOffset, length);
+				dataOffset += length;
+				spaceOffset += length;
+			} else {
+				// null
+				nullFieldsIndicatorSpace[i / 8] = nullFieldsIndicatorSpace[i / 8] | (1 << (7 - i % 8));
+			}
+		}
+	}
+
+	// put rearranged data into parameter data
+	memcpy(space, nullFieldsIndicatorSpace, nullFieldsIndicatorActualSizeSpace);
+	memcpy(data, space, spaceOffset);
+
+	free(space);
+	return rc;
+}
