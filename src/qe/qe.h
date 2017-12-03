@@ -2,12 +2,16 @@
 #define _qe_h_
 
 #include <vector>
+#include <unordered_map>
 
 #include "../rbf/rbfm.h"
 #include "../rm/rm.h"
 #include "../ix/ix.h"
 
+
 #define QE_EOF (-1)  // end of the index scan
+#define MAX_TUPLE_SIZE 200
+#define MAX_TUPLE_IN_PAGE 200
 
 using namespace std;
 
@@ -41,6 +45,7 @@ class Iterator {
         virtual ~Iterator() {};
 
         RC getOneAttr(vector<Attribute> attrs, void *data, void *target, string attr, AttrType &type, int &length);
+        bool compareValue(void *left, int leftLength, void *right, int rightLength, AttrType type, CompOp compOp);
 };
 
 
@@ -210,7 +215,7 @@ class Filter : public Iterator {
         AttrType type;
 
         bool isValid(void *data);
-        bool compareValue(void *left, int leftLength, void *right, int rightLength, AttrType type);
+//        bool compareValue(void *left, int leftLength, void *right, int rightLength, AttrType type);
         RC prepareRightValue(Value value, void *right, int &rightLength);
 };
 
@@ -244,12 +249,35 @@ class BNLJoin : public Iterator {
                const Condition &condition,   // Join condition
                const unsigned numPages       // # of pages that can be loaded into memory,
 			                                 //   i.e., memory block size (decided by the optimizer)
-        ){};
+        );
         ~BNLJoin(){};
 
-        RC getNextTuple(void *data){return QE_EOF;};
+        RC getNextTuple(void *data);
         // For attribute in vector<Attribute>, name it as rel.attr
-        void getAttributes(vector<Attribute> &attrs) const{};
+        void getAttributes(vector<Attribute> &attrs) const;
+
+    private:
+        Iterator *leftIn;
+        TableScan *rightIn;
+        Condition condition;
+        unsigned numPages;
+        vector<Attribute> leftAttrs;
+        vector<Attribute> rightAttrs;
+        vector<Attribute> joinedAttrs;
+
+        unordered_map<string, vector<void *>> mapVarchar;
+        unordered_map<int, vector<void *>> mapInt;
+        unordered_map<float, vector<void *>> mapReal;
+        unsigned maxTuples;
+        int posMultipleKey;
+
+        RC getNextBlock();
+        RC getNextRightTuple(void *data); // just return one tuple
+        void joinTwoAttributes(vector<Attribute> leftAttrs, vector<Attribute> rightAttrs);
+        void joinTwoTuples(void *left, void *right, void *join);
+        bool isValid(void *right, void *data);
+        void getValue(bool left, void *data, string &stringValue, int &intValue, float &realValue);
+
 };
 
 

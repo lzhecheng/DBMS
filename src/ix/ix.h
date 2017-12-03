@@ -105,7 +105,7 @@ public:
 
 	short buildEntry(AttrType type, const void* key, const RID& rid, void* entry);
 
-    protected:
+    public:
         IndexManager();
         ~IndexManager();
 

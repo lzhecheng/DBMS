@@ -1,7 +1,7 @@
 #include "qe.h"
 
 RC Iterator::getOneAttr(vector<Attribute> attrs, void *data, void *target, string attr, AttrType &type, int &length) {
-	RC rc = -1;
+	RC rc = -1; // maybe unable to find the attribute
 	// deal with null-indicator
 	int nullFieldsIndicatorActualSize = ceil((double)attrs.size() / CHAR_BIT);
 	unsigned char *nullFieldsIndicator = (unsigned char *)malloc(nullFieldsIndicatorActualSize);
@@ -26,6 +26,7 @@ RC Iterator::getOneAttr(vector<Attribute> attrs, void *data, void *target, strin
 				// find target
 				memcpy(target, (char*)data + offset, currentLength);
 				length = currentLength;
+				rc = 0;
 				break;
 			} else {
 				offset += currentLength;
@@ -35,6 +36,7 @@ RC Iterator::getOneAttr(vector<Attribute> attrs, void *data, void *target, strin
 			if(attr == (*iter).name) {
 				// find target
 				length = -1;
+				rc = 0;
 				break;
 			}
 		}
@@ -50,51 +52,9 @@ Filter::Filter(Iterator* input, const Condition &condition) {
 	this->condition = condition;
 }
 
-RC Filter::getNextTuple(void *data) {
-	RC rc = 0;
-	do {
-		rc = input->getNextTuple(data);
-		if(rc == QE_EOF) {
-			break;
-		}
-	} while(!isValid(data));
-
-	return rc;
-}
-
-bool Filter::isValid(void *data) {
-	bool isValid = false;
-	// get all attributes
-	vector<Attribute> attrs;
-	getAttributes(attrs);
-
-	void *left = malloc(PAGE_SIZE);
-	void *right = malloc(PAGE_SIZE);
-	int leftLength = 0, rightLength = 0;
-	getOneAttr(attrs, data, left, condition.lhsAttr, type, leftLength); // get everything about left
-
-	if(condition.bRhsIsAttr) {
-		// right-hand side is an attribute
-		AttrType rightType;
-		getOneAttr(attrs, data, right, condition.rhsAttr, rightType, rightLength);
-		if(rightType == type) {
-			isValid = compareValue(left, leftLength, right, rightLength, type);
-		}
-	} else {
-		// right-hand side is a value
-		if(condition.rhsValue.type == type && prepareRightValue(condition.rhsValue, right, rightLength) == 0) {
-			isValid = compareValue(left, leftLength, right, rightLength, type);
-		}
-	}
-
-	free(left);
-	free(right);
-	return isValid;
-}
-
-bool Filter::compareValue(void *left, int leftLength, void *right, int rightLength, AttrType type) {
+bool Iterator::compareValue(void *left, int leftLength, void *right, int rightLength, AttrType type, CompOp compOp) {
 	bool result = false;
-	CompOp compOp = condition.op;
+//	CompOp compOp = condition.op;
 	if(compOp == NO_OP) {
 		result = true;
 	} else if(leftLength == -1 || rightLength == -1) {
@@ -162,6 +122,50 @@ bool Filter::compareValue(void *left, int leftLength, void *right, int rightLeng
 
 	return result;
 }
+
+RC Filter::getNextTuple(void *data) {
+	RC rc = 0;
+	do {
+		rc = input->getNextTuple(data);
+		if(rc == QE_EOF) {
+			break;
+		}
+	} while(!isValid(data));
+
+	return rc;
+}
+
+bool Filter::isValid(void *data) {
+	bool isValid = false;
+	// get all attributes
+	vector<Attribute> attrs;
+	getAttributes(attrs);
+
+	void *left = malloc(PAGE_SIZE);
+	void *right = malloc(PAGE_SIZE);
+	int leftLength = 0, rightLength = 0;
+	getOneAttr(attrs, data, left, condition.lhsAttr, type, leftLength); // get everything about left
+
+	if(condition.bRhsIsAttr) {
+		// right-hand side is an attribute
+		AttrType rightType;
+		getOneAttr(attrs, data, right, condition.rhsAttr, rightType, rightLength);
+		if(rightType == type) {
+			isValid = compareValue(left, leftLength, right, rightLength, type, condition.op);
+		}
+	} else {
+		// right-hand side is a value
+		if(condition.rhsValue.type == type && prepareRightValue(condition.rhsValue, right, rightLength) == 0) {
+			isValid = compareValue(left, leftLength, right, rightLength, type, condition.op);
+		}
+	}
+
+	free(left);
+	free(right);
+	return isValid;
+}
+
+
 
 RC Filter::prepareRightValue(Value value, void *right, int &rightLength) {
 	RC rc = 0;
@@ -277,4 +281,257 @@ RC Project::pickAttrs(void *data) {
 
 	free(space);
 	return rc;
+}
+
+BNLJoin::BNLJoin(Iterator *leftIn, TableScan *rightIn, const Condition &condition, const unsigned numPages) {
+	this->leftIn = leftIn;
+	this->rightIn = rightIn;
+	this->condition = condition;
+	this->numPages = numPages;
+
+	leftIn->getAttributes(leftAttrs);
+	rightIn->getAttributes(rightAttrs);
+	joinTwoAttributes(leftAttrs, rightAttrs); // make joined attributes
+
+	maxTuples = numPages * MAX_TUPLE_IN_PAGE;
+	posMultipleKey = 0;
+}
+
+void BNLJoin::joinTwoAttributes(vector<Attribute> leftAttrs, vector<Attribute> rightAttrs) {
+	joinedAttrs.clear();
+	vector<Attribute>::iterator iterLeft;
+	vector<Attribute>::iterator iterRight;
+	for(iterLeft = leftAttrs.begin(); iterLeft != leftAttrs.end(); iterLeft++) {
+		joinedAttrs.push_back(*iterLeft);
+	}
+	for(iterRight = rightAttrs.begin(); iterRight != rightAttrs.end(); iterRight++) {
+		joinedAttrs.push_back(*iterRight);
+	}
+}
+
+RC BNLJoin::getNextTuple(void *data) {
+	RC rc = 0;
+	void *left = malloc(MAX_TUPLE_SIZE);
+	void *right = malloc(MAX_TUPLE_SIZE);
+
+	if(posMultipleKey == 0) {
+		while(true) {
+			if(getNextRightTuple(right) != 0) {
+				// joining finishes
+				rc = -1;
+				break;
+			} else {
+				if(isValid(right, data)) {
+					rc = 0;
+					break;
+				}
+			}
+		}
+	} else {
+		isValid(right, data);
+		rc = 0;
+	}
+
+	free(left);
+	free(right);
+	return rc;
+}
+
+bool BNLJoin::isValid(void *right, void *data) {
+	bool result = false;
+	string stringValue;
+	int intValue;
+	float realValue;
+	getValue(false, right, stringValue, intValue, realValue);
+
+	if(condition.rhsValue.type == TypeVarChar) {
+		// varchar
+		if(mapVarchar.find(stringValue) == mapVarchar.end()) {
+			// fail to find
+			result = false;
+		} else {
+			// find
+			vector<void *> tmp = mapVarchar[stringValue];
+			result = true;
+			data = tmp[posMultipleKey++];
+			if(posMultipleKey == tmp.size()) {
+				posMultipleKey = 0;
+			}
+		}
+	} else if(condition.rhsValue.type == TypeInt) {
+		// int
+		if(mapInt.find(intValue) == mapInt.end()) {
+			// fail to find
+			result = false;
+		} else {
+			// find
+			vector<void *> tmp = mapInt[intValue];
+			result = true;
+			data = tmp[posMultipleKey++];
+			if(posMultipleKey == tmp.size()) {
+				posMultipleKey = 0;
+			}
+		}
+	} else {
+		// real
+		if(mapReal.find(realValue) == mapReal.end()) {
+			// fail to find
+			result = false;
+		} else {
+			// find
+			vector<void *> tmp = mapReal[realValue];
+			result = true;
+			data = tmp[posMultipleKey++];
+			if(posMultipleKey == tmp.size()) {
+				posMultipleKey = 0;
+			}
+		}
+	}
+
+	return result;
+}
+
+RC BNLJoin::getNextBlock() {
+	RC rc = 0;
+	void *data = malloc(MAX_TUPLE_SIZE);
+	string stringValue;
+	int intValue;
+	float realValue;
+
+	if(condition.rhsValue.type == TypeVarChar) {
+		// varchar
+		mapVarchar.clear();
+		for(int i = 0; i < maxTuples; i++) {
+			rc = leftIn->getNextTuple(data);
+			getValue(true, data, stringValue, intValue, realValue);
+			if(rc != 0) {
+				// no more tuple in left
+				if(i == 0) {
+					// not able to have a new block, finish
+					rc = -1;
+					break;
+				} else {
+					// have a new block
+					rc = 0;
+					break;
+				}
+			} else {
+				if(mapVarchar.find(stringValue) != mapVarchar.end()) {
+					// key exists
+					mapVarchar[stringValue].push_back(data);
+				} else {
+					// key not exists
+					vector<void *> tmp;
+					tmp.push_back(data);
+					mapVarchar[stringValue] = tmp;
+				}
+			}
+		}
+	} else if(condition.rhsValue.type == TypeInt) {
+		// int
+		mapInt.clear();
+		for(int i = 0; i < maxTuples; i++) {
+			rc = leftIn->getNextTuple(data);
+			getValue(true, data, stringValue, intValue, realValue);
+			if(rc != 0) {
+				// no more tuple in left
+				if(i == 0) {
+					// not able to have a new block, finish
+					rc = -1;
+					break;
+				} else {
+					// have a new block
+					rc = 0;
+					break;
+				}
+			} else {
+				if(mapInt.find(intValue) != mapInt.end()) {
+					// key exists
+					mapInt[intValue].push_back(data);
+				} else {
+					// key not exists
+					vector<void *> tmp;
+					tmp.push_back(data);
+					mapInt[intValue] = tmp;
+				}
+			}
+		}
+	} else {
+		// real
+		mapReal.clear();
+		for(int i = 0; i < maxTuples; i++) {
+			rc = leftIn->getNextTuple(data);
+			getValue(true, data, stringValue, intValue, realValue);
+			if(rc != 0) {
+				// no more tuple in left
+				if(i == 0) {
+					// not able to have a new block, finish
+					rc = -1;
+					break;
+				} else {
+					// have a new block
+					rc = 0;
+					break;
+				}
+			} else {
+				if(mapReal.find(realValue) != mapReal.end()) {
+					// key exists
+					mapReal[realValue].push_back(data);
+				} else {
+					// key not exists
+					vector<void *> tmp;
+					tmp.push_back(data);
+					mapReal[realValue] = tmp;
+				}
+			}
+		}
+	}
+
+	free(data);
+	return rc;
+}
+
+void BNLJoin::getValue(bool left, void *data, string &stringValue, int &intValue, float &realValue) {
+	int length;
+	void *target = malloc(MAX_TUPLE_SIZE);
+    if(!left) getOneAttr(rightAttrs, data, target, condition.rhsAttr, condition.rhsValue.type, length);
+    else getOneAttr(leftAttrs, data, target, condition.lhsAttr, condition.rhsValue.type, length);
+    if(condition.rhsValue.type == TypeVarChar) {
+		// varchar
+		string result = "";
+        for(int i = 0 ; i < length; i++) {
+        		result += *((char*)target + i);
+        }
+		stringValue = result;
+	} else if(condition.rhsValue.type == TypeInt) {
+		// int
+		intValue = *((int*)((char*)target));
+	} else {
+		// real
+		realValue = *((float*)((char*)target));
+	}
+
+	free(target);
+}
+
+
+RC BNLJoin::getNextRightTuple(void *data) {
+	RC rc = 0;
+	rc = rightIn->getNextTuple(data);
+	if(rc != 0) {
+		// last tuple in right already got. Check if should get the next block
+		rc = getNextBlock();
+		if(rc == 0) {
+			// a new block
+			rightIn->setIterator();
+			rc = getNextRightTuple(data);
+		}
+		// if rc == -1, join should finish
+	}
+	return rc;
+}
+
+void BNLJoin::getAttributes(vector<Attribute> &attrs) const {
+	attrs.clear();
+	attrs = joinedAttrs;
 }
