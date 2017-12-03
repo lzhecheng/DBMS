@@ -46,6 +46,9 @@ class Iterator {
 
         RC getOneAttr(vector<Attribute> attrs, void *data, void *target, string attr, AttrType &type, int &length);
         bool compareValue(void *left, int leftLength, void *right, int rightLength, AttrType type, CompOp compOp);
+        void joinTwoAttributes(vector<Attribute> leftAttrs, vector<Attribute> rightAttrs, vector<Attribute> &joinedAttrs);
+        void joinTwoTuples(vector<Attribute> leftAttrs, void *left, vector<Attribute> rightAttrs, void *right, void *join);
+        void lengthOfTuple(vector<Attribute> attrs, void *data, int &nullindicatorLength, int &length);
 };
 
 
@@ -273,12 +276,9 @@ class BNLJoin : public Iterator {
 
         RC getNextBlock();
         RC getNextRightTuple(void *data); // just return one tuple
-        void joinTwoAttributes(vector<Attribute> leftAttrs, vector<Attribute> rightAttrs);
-        void joinTwoTuples(void *left, void *right, void *join);
-        bool isValid(void *right, void *data);
+        bool isValid(void *right, void *left);
         void getValue(bool left, void *data, string &stringValue, int &intValue, float &realValue);
         void clearMap();
-
 };
 
 
@@ -288,12 +288,26 @@ class INLJoin : public Iterator {
         INLJoin(Iterator *leftIn,           // Iterator of input R
                IndexScan *rightIn,          // IndexScan Iterator of input S
                const Condition &condition   // Join condition
-        ){};
-        ~INLJoin(){};
+        );
+        ~INLJoin();
 
-        RC getNextTuple(void *data){return QE_EOF;};
+        RC getNextTuple(void *data);
         // For attribute in vector<Attribute>, name it as rel.attr
-        void getAttributes(vector<Attribute> &attrs) const{};
+        void getAttributes(vector<Attribute> &attrs) const;
+
+    private:
+        Iterator *leftIn;
+        IndexScan *rightIn;
+        Condition condition;
+        bool getRightTupleFinish;
+        void *left;
+//        void *leftKey;
+
+        vector<Attribute> leftAttrs;
+        vector<Attribute> rightAttrs;
+        vector<Attribute> joinedAttrs;
+
+        void rightTupleToFirst(void *left);
 };
 
 // Optional for everyone. 10 extra-credit points
