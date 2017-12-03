@@ -113,6 +113,9 @@ public:
   void createIndexName(string& indexName, const string &tableName, const string &attributeName);
   bool hasIndex(RelationManager rm, const string& tableName, const string& attrName);
 
+  RC insertInIndex(const string &tableName, const void *data, const RID &rid);
+  RC deleteInIndex(const string& tableName, const void* data, const RID& rid);
+
 
   RelationManager();
   ~RelationManager();

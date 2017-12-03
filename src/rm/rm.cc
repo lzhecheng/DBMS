@@ -179,7 +179,7 @@ void RelationManager::createIndexName(string& indexName, const string &tableName
 
 
 bool RelationManager::hasIndex(RelationManager rm, const string& tableName, const string& attrName) {
-	RC rc;
+	RC rc = 0;
 	string indexName;
 	createIndexName(indexName, tableName, attrName);
 
@@ -218,6 +218,107 @@ bool RelationManager::hasIndex(RelationManager rm, const string& tableName, cons
 	return false;
 }
 
+
+RC RelationManager::insertInIndex(const string& tableName, const void* data, const RID& rid) {
+    // deal with index file (if exists)
+    vector<Attribute> attrs;
+    Attribute attr;
+    IXFileHandle ixfh;
+    RelationManager rm;
+    string indexName;
+    RC rc = 0;
+
+    void* key = malloc(PAGE_SIZE);
+    if (key == NULL) return -12;
+    memset(key, 0, PAGE_SIZE);
+    rc = getAttributes(tableName, attrs);
+    if (rc != 0) return -12;
+    int length = 0, nullOffset = 0, dataOffset = attrs.size() / 8 + 1;
+    for (int i = 0; i < attrs.size(); i++) {
+    	attr = attrs[i];
+    	createIndexName(indexName, tableName, attr.name);
+    	nullOffset = i / 8;
+    	char nullByte;
+    	memcpy(&nullByte, (char*)data + nullOffset, 1);
+    	if ((nullByte & (1 << (7 - i % 8))) == 0) {
+    		if (attr.type == TypeVarChar) {
+    			memcpy(&length, (char*)data + dataOffset, sizeof(int));
+    			memcpy(key, (char*)data + dataOffset, length + sizeof(int));
+    			dataOffset += sizeof(int) + length;
+    		} else if (attr.type == TypeInt) {
+    			memcpy(key, (char*)data + dataOffset, sizeof(int));
+    			dataOffset += sizeof(int);
+    		} else if (attr.type == TypeReal) {
+    			memcpy(key, (char*)data + dataOffset, sizeof(float));
+    			dataOffset += sizeof(float);
+    		}
+
+    		if (hasIndex(rm, tableName, attr.name)) {
+    			ixm.openFile(indexName, ixfh);
+    			if (rc != 0) return -12;
+    			ixm.insertEntry(ixfh, attr, key, rid);
+    			if (rc != 0) return -12;
+    			ixm.closeFile(ixfh);
+    			if (rc != 0) return -12;
+    		}
+    	}
+    }
+
+    free(key);
+	return rc;
+}
+
+RC RelationManager::deleteInIndex(const string& tableName, const void* data, const RID& rid) {
+    // deal with index file (if exists)
+    vector<Attribute> attrs;
+    Attribute attr;
+    IXFileHandle ixfh;
+    RelationManager rm;
+    string indexName;
+    RC rc = 0;
+
+    void* key = malloc(PAGE_SIZE);
+    if (key == NULL) return -12;
+    memset(key, 0, PAGE_SIZE);
+    rc = getAttributes(tableName, attrs);
+    if (rc != 0) return -12;
+    int length = 0, nullOffset = 0, dataOffset = attrs.size() / 8 + 1;
+    for (int i = 0; i < attrs.size(); i++) {
+    	attr = attrs[i];
+    	createIndexName(indexName, tableName, attr.name);
+    	nullOffset = i / 8;
+    	char nullByte;
+    	memcpy(&nullByte, (char*)data + nullOffset, 1);
+    	if ((nullByte & (1 << (7 - i % 8))) == 0) {
+    		if (attr.type == TypeVarChar) {
+    			memcpy(&length, (char*)data + dataOffset, sizeof(int));
+    			memcpy(key, (char*)data + dataOffset, length + sizeof(int));
+    			dataOffset += sizeof(int) + length;
+    		} else if (attr.type == TypeInt) {
+    			memcpy(key, (char*)data + dataOffset, sizeof(int));
+    			dataOffset += sizeof(int);
+    		} else if (attr.type == TypeReal) {
+    			memcpy(key, (char*)data + dataOffset, sizeof(float));
+    			dataOffset += sizeof(float);
+    		}
+
+    		if (hasIndex(rm, tableName, attr.name)) {
+    			ixm.openFile(indexName, ixfh);
+    			if (rc != 0) return -12;
+    			ixm.deleteEntry(ixfh, attr, key, rid);
+    			if (rc != 0) return -12;
+    			ixm.closeFile(ixfh);
+    			if (rc != 0) return -12;
+    		}
+    	}
+    }
+
+    free(key);
+	return rc;
+}
+
+
+
 RelationManager* RelationManager::_rm = 0;
 
 RelationManager* RelationManager::instance()
@@ -239,7 +340,7 @@ RelationManager::~RelationManager()
 
 RC RelationManager::createCatalog()
 {
-	RC rc;
+	RC rc = 0;
 	// Create two elementary tables, use fh1 and fh2 to handle Table and Columns respectively.
 	rc = rbfm.createFile("Tables");
 	if (rc != 0) return -5;
@@ -309,24 +410,24 @@ RC RelationManager::createCatalog()
 	if (rc != 0) return -5;
 	rc = rbfm.closeFile(fh2);
 	if (rc != 0) return -5;
-	return 0;
+	return rc;
 }
 
 RC RelationManager::deleteCatalog()
 {
-	RC rc;
+	RC rc = 0;
 
     rc = rbfm.destroyFile("Tables");
     if (rc != 0) return -5;
     rc = rbfm.destroyFile("Columns");
     if (rc != 0) return -5;
 
-	return 0;
+	return rc;
 }
 
 RC RelationManager::createTable(const string &tableName, const vector<Attribute> &attrs)
 {
-	RC rc;
+	RC rc = 0;
 	if (!validTable(tableName)) return -4;
 	rc = rbfm.createFile(tableName);
 	if (rc != 0) return -5;
@@ -376,12 +477,12 @@ RC RelationManager::createTable(const string &tableName, const vector<Attribute>
     if (rc != 0) return -5;
     rc = rbfm.closeFile(fh2);
     if (rc != 0) return -5;
-	return 0;
+	return rc;
 }
 
 RC RelationManager::deleteTable(const string &tableName)
 {
-	RC rc;
+	RC rc = 0;
 	// Check tableName in case of deleting "Tables" or "Columns", tid won't decrease
 	if (!validTable(tableName)) return -4;
 	rc = rbfm.destroyFile(tableName);
@@ -433,7 +534,7 @@ RC RelationManager::deleteTable(const string &tableName)
 	rc = scan("Columns", "table-id", EQ_OP, &tid, RD_column, rm_ScanIterator);
 	if (rc != 0) return -5;
 	setZero(rid);
-	while ((rc = rm_ScanIterator.getNextTuple(rid, data)) != RM_EOF) {
+	while ((rm_ScanIterator.getNextTuple(rid, data)) != RM_EOF) {
 		rids.push_back(rid);
 	}
 	free(data);
@@ -452,12 +553,12 @@ RC RelationManager::deleteTable(const string &tableName)
 	}
 
 
-	return 0;
+	return rc;
 }
 
 RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &attrs)
 {
-	RC rc;
+	RC rc = 0;
 	vector<string> RD_id, RD_column;
 	createRD_id(RD_id);
 
@@ -510,19 +611,19 @@ RC RelationManager::getAttributes(const string &tableName, vector<Attribute> &at
 	rc = scan("Columns", "table-id", EQ_OP, &tid, RD_column, rm_ScanIterator);
 	if (rc != 0) return -5;
 	setZero(rid);
-	while ((rc = rm_ScanIterator.getNextTuple(rid, data)) != RM_EOF) {
+	while ((rm_ScanIterator.getNextTuple(rid, data)) != RM_EOF) {
 		insertAttr(data, attrs);
 	}
 
 	free(data);
 	rm_ScanIterator.close();
 
-    return 0;
+    return rc;
 }
 
 RC RelationManager::insertTuple(const string &tableName, const void *data, RID &rid)
 {
-	RC rc;
+	RC rc = 0;
 	FileHandle fh;
 
 	// deal with heap file
@@ -533,82 +634,75 @@ RC RelationManager::insertTuple(const string &tableName, const void *data, RID &
     if (rc != 0) return -5;
     rc = rbfm.closeFile(fh);
     if (rc != 0) return -5;
-
-    // deal with index file (if exists)
-    vector<Attribute> attrs;
-    Attribute attr;
-    IXFileHandle ixfh;
-    RelationManager rm;
-    string indexName;
-
-    void* key = malloc(PAGE_SIZE);
-    if (key == NULL) return -12;
-    memset(key, 0, PAGE_SIZE);
-    rc = getAttributes(tableName, attrs);
+    rc = insertInIndex(tableName, data, rid);
     if (rc != 0) return -12;
-    int length = 0, nullOffset = 0, dataOffset = attrs.size() / 8 + 1;
-    for (int i = 0; i < attrs.size(); i++) {
-    	attr = attrs[i];
-    	createIndexName(indexName, tableName, attr.name);
-    	nullOffset = i / 8;
-    	char nullByte;
-    	memcpy(&nullByte, (char*)data + nullOffset, 1);
-    	if ((nullByte & (1 << (7 - i % 8))) == 0) {
-    		if (attr.type == TypeVarChar) {
-    			memcpy(&length, (char*)data + dataOffset, sizeof(int));
-    			memcpy(key, (char*)data + dataOffset, length + sizeof(int));
-    			dataOffset += sizeof(int) + length;
-    		} else if (attr.type == TypeInt) {
-    			memcpy(key, (char*)data + dataOffset, sizeof(int));
-    			dataOffset += sizeof(int);
-    		} else if (attr.type == TypeReal) {
-    			memcpy(key, (char*)data + dataOffset, sizeof(float));
-    			dataOffset += sizeof(float);
-    		}
 
-    		if (hasIndex(rm, tableName, attr.name)) {
-    			ixm.openFile(indexName, ixfh);
-    			ixm.insertEntry(ixfh, attr, key, rid);
-    			ixm.closeFile(ixfh);
-    		}
-    	}
-    }
+    return rc;
 
-    free(key);
-	return 0;
 }
 
 RC RelationManager::deleteTuple(const string &tableName, const RID &rid)
 {
-	RC rc;
+	RC rc = 0;
 	FileHandle fh;
 	rc = rbfm.openFile(tableName, fh);
 	if (rc != 0) return -5;
 	if (!validTable(tableName)) return -4;
+
+	// deal with index file (if exists)
+	void* data = malloc(PAGE_SIZE);
+	if (data == NULL) return -3;
+	memset(data, 0, PAGE_SIZE);
+
+	rc = readTuple(tableName, rid, data);
+	if (rc != 0) return -5;
+	rc = deleteInIndex(tableName, data, rid);
+	if (rc != 0) return -12;
+
+	// now can delete tuple
 	rc = deleteTupleNoCheck(fh, tableName, rid);
-	if (rc != 0) return -6;
+	if (rc != 0) return -5;
     rc = rbfm.closeFile(fh);
-    if (rc != 0) return -7;
-    return 0;
+    if (rc != 0) return -5;
+
+    free(data);
+    return rc;
 }
 
 RC RelationManager::updateTuple(const string &tableName, const void *data, const RID& rid)
 {
-	RC rc;
+	RC rc = 0;
 	FileHandle fh;
 	rc = rbfm.openFile(tableName, fh);
 	if (rc != 0) return -5;
 	if (!validTable(tableName)) return -4;
+
+	// deal with index file (if exists): first delete entry with old key, then insert entry with new key
+	void* oldData = malloc(PAGE_SIZE);
+	if (oldData == NULL) return -3;
+	memset(oldData, 0, PAGE_SIZE);
+
+	rc = readTuple(tableName, rid, oldData);
+	if (rc != 0) return -5;
+	rc = deleteInIndex(tableName, oldData, rid);
+	if (rc != 0) return -12;
+	free(oldData);
+
+	// insert entry with new key
+	rc = insertInIndex(tableName, data, rid);
+
+	// now can insert tuple
     rc = updateTupleNoCheck(fh, tableName, data, rid);
     if (rc != 0) return -5;
     rc = rbfm.closeFile(fh);
     if (rc != 0) return -5;
-    return 0;
+
+    return rc;
 }
 
 RC RelationManager::readTuple(const string &tableName, const RID &rid, void *data)
 {
-	RC rc;
+	RC rc = 0;
     FileHandle fh;
     rc = rbfm.openFile(tableName, fh);
     if (rc != 0) return -5;
@@ -628,15 +722,15 @@ RC RelationManager::readTuple(const string &tableName, const RID &rid, void *dat
 
 RC RelationManager::printTuple(const vector<Attribute> &attrs, const void *data)
 {
-	RC rc;
+	RC rc = 0;
 	rc = rbfm.printRecord(attrs, data);
 	if (rc != 0) return -5;
-	return 0;
+	return rc;
 }
 
 RC RelationManager::readAttribute(const string &tableName, const RID &rid, const string &attributeName, void *data)
 {
-	RC rc;
+	RC rc = 0;
     FileHandle fh;
     rc = rbfm.openFile(tableName, fh);
     if (rc != 0) return -5;
@@ -646,7 +740,7 @@ RC RelationManager::readAttribute(const string &tableName, const RID &rid, const
 	if (rc != 0) return -5;
 	rc = rbfm.closeFile(fh);
 	if (rc != 0) return -5;
-	return 0;
+	return rc;
 }
 
 
@@ -657,7 +751,7 @@ RC RelationManager::scan(const string &tableName,
       const vector<string> &attributeNames,
       RM_ScanIterator &rm_ScanIterator)
 {
-	RC rc;
+	RC rc = 0;
     FileHandle fh;
     rc = rbfm.openFile(tableName, fh);
     if (rc != 0) return -5;
@@ -665,7 +759,7 @@ RC RelationManager::scan(const string &tableName,
     getAttributes(tableName, RD);
     rc = rbfm.scan(fh, RD, conditionAttribute, compOp, value, attributeNames, rm_ScanIterator.rbfm_ScanIterator);
     if (rc != 0) return -5;
-	return 0;
+	return rc;
 }
 
 RC RM_ScanIterator::getNextTuple(RID &rid, void *data) {
@@ -707,7 +801,7 @@ RC RelationManager::addAttribute(const string &tableName, const Attribute &attr)
 
 RC RelationManager::createIndex(const string &tableName, const string &attrName)
 {
-	RC rc;
+	RC rc = 0;
 
 	// get indexName
 	string indexName;
@@ -787,12 +881,12 @@ RC RelationManager::createIndex(const string &tableName, const string &attrName)
     ixm.closeFile(ixfh);
     free(entry);
     free(key);
-	return 0;
+	return rc;
 }
 
 RC RelationManager::destroyIndex(const string &tableName, const string &attributeName)
 {
-	RC rc;
+	RC rc = 0;
 
 	// get indexName
 	string indexName;
@@ -843,7 +937,7 @@ RC RelationManager::destroyIndex(const string &tableName, const string &attribut
 	free(name);
 	free(data);
 
-	return 0;
+	return rc;
 }
 
 RC RelationManager::indexScan(const string &tableName,
@@ -854,7 +948,7 @@ RC RelationManager::indexScan(const string &tableName,
                       bool highKeyInclusive,
                       RM_IndexScanIterator &rm_IndexScanIterator)
 {
-	RC rc;
+	RC rc = 0;
 	string indexName;
 	createIndexName(indexName, tableName, attributeName);
 
@@ -876,5 +970,3 @@ RC RelationManager::indexScan(const string &tableName,
 
 	return rc;
 }
-
-
