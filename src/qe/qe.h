@@ -277,6 +277,7 @@ class BNLJoin : public Iterator {
         void joinTwoTuples(void *left, void *right, void *join);
         bool isValid(void *right, void *data);
         void getValue(bool left, void *data, string &stringValue, int &intValue, float &realValue);
+        void clearMap();
 
 };
 

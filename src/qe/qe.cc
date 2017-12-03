@@ -400,7 +400,7 @@ RC BNLJoin::getNextBlock() {
 
 	if(condition.rhsValue.type == TypeVarChar) {
 		// varchar
-		mapVarchar.clear();
+		clearMap();
 		for(int i = 0; i < maxTuples; i++) {
 			rc = leftIn->getNextTuple(data);
 			getValue(true, data, stringValue, intValue, realValue);
@@ -429,7 +429,7 @@ RC BNLJoin::getNextBlock() {
 		}
 	} else if(condition.rhsValue.type == TypeInt) {
 		// int
-		mapInt.clear();
+		clearMap();
 		for(int i = 0; i < maxTuples; i++) {
 			rc = leftIn->getNextTuple(data);
 			getValue(true, data, stringValue, intValue, realValue);
@@ -458,7 +458,7 @@ RC BNLJoin::getNextBlock() {
 		}
 	} else {
 		// real
-		mapReal.clear();
+		clearMap();
 		for(int i = 0; i < maxTuples; i++) {
 			rc = leftIn->getNextTuple(data);
 			getValue(true, data, stringValue, intValue, realValue);
@@ -487,8 +487,39 @@ RC BNLJoin::getNextBlock() {
 		}
 	}
 
-	free(data);
+//	free(data);
 	return rc;
+}
+
+void BNLJoin::clearMap() {
+	if(condition.rhsValue.type == TypeVarChar) {
+		unordered_map<string, vector<void *>>::iterator iter;
+		for(iter = mapVarchar.begin(); iter != mapVarchar.end(); iter++) {
+			vector<void *>::iterator iterVector;
+			for(iterVector = (*iter).second.begin(); iterVector != (*iter).second.end(); iterVector++) {
+				free(*iterVector);
+			}
+		}
+		mapVarchar.clear();
+	} else if(condition.rhsValue.type == TypeInt) {
+		unordered_map<int, vector<void *>>::iterator iter;
+		for(iter = mapInt.begin(); iter != mapInt.end(); iter++) {
+			vector<void *>::iterator iterVector;
+			for(iterVector = (*iter).second.begin(); iterVector != (*iter).second.end(); iterVector++) {
+				free(*iterVector);
+			}
+		}
+		mapInt.clear();
+	} else {
+		unordered_map<float, vector<void *>>::iterator iter;
+		for(iter = mapReal.begin(); iter != mapReal.end(); iter++) {
+			vector<void *>::iterator iterVector;
+			for(iterVector = (*iter).second.begin(); iterVector != (*iter).second.end(); iterVector++) {
+				free(*iterVector);
+			}
+		}
+		mapReal.clear();
+	}
 }
 
 void BNLJoin::getValue(bool left, void *data, string &stringValue, int &intValue, float &realValue) {
