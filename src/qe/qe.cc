@@ -41,7 +41,7 @@ RC Iterator::getOneAttr(vector<Attribute> attrs, void *data, void *target, strin
 			}
 		}
 	}
-
+	cout<<"get one attrs: rc "<<rc<<endl;
 	free(nullFieldsIndicator);
 	return rc;
 }
@@ -170,6 +170,7 @@ void Iterator::lengthOfTuple(vector<Attribute> attrs, void *data, int &nullindic
 Filter::Filter(Iterator* input, const Condition &condition) {
 	this->input = input;
 	this->condition = condition;
+	this->type = condition.rhsValue.type;
 }
 
 RC Filter::getNextTuple(void *data) {
@@ -615,7 +616,6 @@ INLJoin::INLJoin(Iterator *leftIn, IndexScan *rightIn, const Condition &conditio
 	this->condition = condition;
 	getRightTupleFinish = true;
 	left = malloc(MAX_TUPLE_SIZE);
-//	leftKey = malloc(MAX_TUPLE_SIZE);
 
 	leftIn->getAttributes(leftAttrs);
 	leftIn->getAttributes(rightAttrs);
@@ -626,7 +626,6 @@ INLJoin::INLJoin(Iterator *leftIn, IndexScan *rightIn, const Condition &conditio
 
 INLJoin::~INLJoin() {
 	free(left);
-//	free(leftkey);
 }
 
 RC INLJoin::getNextTuple(void *data) {

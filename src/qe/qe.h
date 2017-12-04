@@ -218,7 +218,6 @@ class Filter : public Iterator {
         AttrType type;
 
         bool isValid(void *data);
-//        bool compareValue(void *left, int leftLength, void *right, int rightLength, AttrType type);
         RC prepareRightValue(Value value, void *right, int &rightLength);
 };
 

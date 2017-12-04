@@ -1,7 +1,5 @@
 #include "ix.h"
 
-#include "ix.h"
-
 bool IndexManager::isEmpty(IXFileHandle& ixfh) {
 	if (ixfh.getNumberOfPages() == 0)
 		return true;
@@ -629,7 +627,6 @@ RC IndexManager::insertCompositeKey(IXFileHandle& ixfh, RID& rid, POP& pop, vect
 
 				// insert as middle, pop entryAfter, shift entry succeeding
 				if (shiftNumber != 1 && shiftNumber != 0) {
-					short entryAfterLength = getKeyLength(rid.slotNum, page);
 					short entryAfterOffset = getKeyOffset(rid.slotNum, page);
 					short entryAfterEndOffset = getTotalOffset(page);
 					memcpy(newPage, page, sizeof(int));
@@ -919,10 +916,6 @@ RC IndexManager::searchEntry(void* page, vector<RID>& rids, IXFileHandle& ixfh, 
 		memset(entry, 0, PAGE_SIZE);
 
 		for (i = 0; i < slotNumber; i++) {
-
-			if (i == 254)
-				int a = 1;
-
 			short entryLength = getKeyLength(i, page);
 			short entryOffset = getKeyOffset(i, page);
 			memcpy((char*)entry, (char*)page + entryOffset, entryLength);
@@ -1578,6 +1571,8 @@ int IndexManager::printBtreeHelper(unsigned currentNum, unsigned level, IXFileHa
 	return 0;
 }
 
+
+
 IX_ScanIterator::IX_ScanIterator() {
 	pageNum = 0;
 	slotNum = 0;
@@ -1602,12 +1597,12 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
 	void *space = malloc(PAGE_SIZE);
 	if (firstSearch) {
 		firstSearch = false;
-		int targetLeafPage = getToLeafPage(ixfileHandle->rootNum);
+		int targetLeafPage = getToLeafPage(ixfileHandle.rootNum);
 		if(targetLeafPage == -1) {
 			free(space);
 			return -1;
 		}
-		rc = ixfileHandle->readPage(targetLeafPage, space);
+		rc = ixfileHandle.readPage(targetLeafPage, space);
 		if(rc != 0) {
 			free(space);
 			return rc; // if readpage correct
@@ -1617,7 +1612,7 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
 	} else {
 		// check if professor deletes during scanning
 		// check current key's rid
-		ixfileHandle->readPage(pageNum, space);
+		ixfileHandle.readPage(pageNum, space);
 		if(slotNum != 0) {
 			short keyStart = *((short*)((char*)space + PAGE_SIZE - sizeof(short) * (3 + 2 * slotNum)));
 			short keyLength = *((short*)((char*)space + PAGE_SIZE - sizeof(short) * (2 + 2 * slotNum))) - 2 * USSIZE;
@@ -1641,7 +1636,7 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
 				keyFlag = 1;
 				break;
 			} else {
-				rc = ixfileHandle->readPage(siblingNum, space);
+				rc = ixfileHandle.readPage(siblingNum, space);
 				if(rc != 0) {
 					free(space);
 					return rc; // if readpage correct
@@ -1725,7 +1720,7 @@ int IX_ScanIterator::getToLeafPage(unsigned rootPage) {
 	unsigned currentPage = rootPage;
 	void *space = malloc(PAGE_SIZE);
 	while (true) {
-		RC rc = ixfileHandle->readPage(currentPage, space);
+		RC rc = ixfileHandle.readPage(currentPage, space);
 		if (rc != 0) {
 			free(space);
 			return rc;
@@ -1799,11 +1794,11 @@ void IX_ScanIterator::iterCompare(void *space, short keyOffset, short keyLength,
 	}
 }
 
-RC IX_ScanIterator::prepare(IXFileHandle &ixfileHandle, const Attribute &attribute,
+RC IX_ScanIterator::prepare(IXFileHandle &ixfh, const Attribute &attribute,
 		const void *lowKey, const void *highKey, bool lowKeyInclusive,
 		bool highKeyInclusive) {
 	RC rc = 0;
-    this->ixfileHandle = &ixfileHandle;
+    ixfileHandle = ixfh;
     this->attribute = attribute;
     this->lowKey = lowKey;
     this->highKey = highKey;

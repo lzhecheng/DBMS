@@ -105,7 +105,6 @@ public:
 
 	short buildEntry(AttrType type, const void* key, const RID& rid, void* entry);
 
-    public:
         IndexManager();
         ~IndexManager();
 
@@ -165,8 +164,7 @@ class IX_ScanIterator {
         		const void *lowKey, const void *highKey, bool lowKeyInclusive,
         		bool highKeyInclusive);
 
-    private:
-        IXFileHandle *ixfileHandle;
+        IXFileHandle ixfileHandle;
         Attribute attribute;
         const void *lowKey;
 		const void *highKey;
@@ -177,16 +175,18 @@ class IX_ScanIterator {
         short slotNum;
         bool firstSearch;
 
+		RID lastRID;
+		string lowVarchar;
+		string highVarchar;
+		int lowInt;
+		int highInt;
+		float lowReal;
+		float highReal;
+
+
         int getToLeafPage(unsigned rootPage);
         void iterCompare(void *space, short keyOffset, short keyLength, int &lowResult, int &highResult); // current ? key : -1 for smaller, 0 for equal, 1 for larger
-    		RID lastRID;
 
-    		string lowVarchar;
-    		string highVarchar;
-    		int lowInt;
-    		int highInt;
-    		float lowReal;
-    		float highReal;
 };
 
 class IXPagedFileManager {
