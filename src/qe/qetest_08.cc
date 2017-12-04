@@ -129,6 +129,8 @@ RC testCase_8() {
 	}
 
 	if (expectedResultCnt != actualResultCnt) {
+		cout<<"expectedResultCnt "<<expectedResultCnt<<endl;
+		cout<<"actualResultCnt "<<actualResultCnt<<endl;
 		cerr << "***** The number of returned tuple is not correct. *****" << endl;
 		rc = fail;
 	}

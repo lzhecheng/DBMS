@@ -85,8 +85,10 @@ RC privateTestCase_2() {
 		nullBit2 = *(unsigned char *)((char *)data2 + offset) & (1 << 7);
 		
 		if (!nullBit1) {
+			cout<<"data1 b value "<<*((int*)((char*)data1+5))<<endl;
 			tsVal = *(int *) ((char *) data1 + offset);
 		} else {
+			cout<<"data1 b value(null) "<<*((int*)((char*)data1+1))<<endl;
 			tsVal = -9999; // Assign an arbitrary number
 			nullCount1++;
 		}
@@ -102,7 +104,6 @@ RC privateTestCase_2() {
 
 		memset(data1, 0, bufSize);
 		memset(data2, 0, bufSize);
-		
 		count++;
 	}
 

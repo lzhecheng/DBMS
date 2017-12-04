@@ -252,7 +252,7 @@ class BNLJoin : public Iterator {
                const unsigned numPages       // # of pages that can be loaded into memory,
 			                                 //   i.e., memory block size (decided by the optimizer)
         );
-        ~BNLJoin(){};
+        ~BNLJoin();
 
         RC getNextTuple(void *data);
         // For attribute in vector<Attribute>, name it as rel.attr
@@ -271,11 +271,12 @@ class BNLJoin : public Iterator {
         unordered_map<int, vector<void *>> mapInt;
         unordered_map<float, vector<void *>> mapReal;
         unsigned maxTuples;
-        int posMultipleKey;
+        int posMultipleKey; // one key - multiple values
+        void *right;
 
         RC getNextBlock();
-        RC getNextRightTuple(void *data); // just return one tuple
-        bool isValid(void *right, void *left);
+        RC getNextRightTuple(); // just return one tuple
+        bool isValid(void *left); // left is got in this function
         void getValue(bool left, void *data, string &stringValue, int &intValue, float &realValue);
         void clearMap();
 };

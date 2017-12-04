@@ -41,7 +41,7 @@ RC Iterator::getOneAttr(vector<Attribute> attrs, void *data, void *target, strin
 			}
 		}
 	}
-	cout<<"get one attrs: rc "<<rc<<endl;
+//	cout<<"get one attrs: rc "<<rc<<endl;
 	free(nullFieldsIndicator);
 	return rc;
 }
@@ -133,6 +133,8 @@ void Iterator::joinTwoTuples(vector<Attribute> leftAttrs, void *left, vector<Att
 	int nullFieldsIndicatorActualSizeLeft;
 	int leftLength;
 	lengthOfTuple(leftAttrs, left, nullFieldsIndicatorActualSizeLeft, leftLength);
+//	cout<<"left null "<<nullFieldsIndicatorActualSizeLeft<<endl;
+//	cout<<"left length "<<leftLength<<endl;
 	// right
 	int nullFieldsIndicatorActualSizeRight;
 	int rightLength;
@@ -158,7 +160,7 @@ void Iterator::lengthOfTuple(vector<Attribute> attrs, void *data, int &nullindic
 
 	int tLength = nullFieldsIndicatorActualSize;
 	for(int i = 0; i < attrs.size(); i++) {
-		if(nullFieldsIndicator[i / 8] & (1 << (7 - i % 8))) {
+		if((nullFieldsIndicator[i / 8] & (1 << (7 - i % 8))) == 0) {
 			tLength += (attrs.at(i).type == TypeVarChar) ? *((int*)((char*)left + tLength)) + sizeof(int) : sizeof(int);
 		}
 	}
@@ -346,40 +348,62 @@ BNLJoin::BNLJoin(Iterator *leftIn, TableScan *rightIn, const Condition &conditio
 
 	maxTuples = numPages * MAX_TUPLE_IN_PAGE;
 	posMultipleKey = 0;
+	right = malloc(MAX_TUPLE_SIZE);
 }
+
+BNLJoin::~BNLJoin() {
+	free(right);
+}
+
 
 RC BNLJoin::getNextTuple(void *data) {
 	RC rc = 0;
 	void *left = malloc(MAX_TUPLE_SIZE);
-	void *right = malloc(MAX_TUPLE_SIZE);
 
 	if(posMultipleKey == 0) {
+		// start a new right
 		while(true) {
-			if(getNextRightTuple(right) != 0) {
+			if(getNextRightTuple() != 0) {
 				// joining finishes
 				rc = -1;
 				break;
 			} else {
-				if(isValid(right, left)) {
+				if(isValid(left)) {
+					// find one but need to check if valid
+//					cout<<"find one, first time"<<endl;
 					rc = 0;
 					break;
 				}
 			}
 		}
 	} else {
-		isValid(right, data);
+		// last right still has some left to join (a key - multiple values)
+		// sure to find one
+		isValid(left);
 		rc = 0;
 	}
 
 	// join two tuple
-	joinTwoTuples(leftAttrs, left, rightAttrs, right, data);
+	if(rc == 0) {
+		// check left and right
+//		int leftTestValue = *((int*)((char*)left + 5));
+//		int rightTestValue = *((int*)((char*)right + 1));
+//		cout<<"left value "<<leftTestValue<<endl;
+//		cout<<"right value "<<rightTestValue<<endl;
+
+		joinTwoTuples(leftAttrs, left, rightAttrs, right, data);
+//		// check join value
+//		int joinLeft = *((int*)((char*)data+5));
+//		int joinRight = *((int*)((char*)data+13));
+//		cout<<"join left " <<joinLeft<<endl;
+//		cout<<"join right "<<joinRight<<endl;
+	}
 
 	free(left);
-	free(right);
 	return rc;
 }
 
-bool BNLJoin::isValid(void *right, void *left) {
+bool BNLJoin::isValid(void *left) {
 	bool result = false;
 	string stringValue;
 	int intValue;
@@ -395,7 +419,8 @@ bool BNLJoin::isValid(void *right, void *left) {
 			// find
 			vector<void *> tmp = mapVarchar[stringValue];
 			result = true;
-			left = tmp[posMultipleKey++];
+			memcpy(left, tmp[posMultipleKey], MAX_TUPLE_SIZE);
+			posMultipleKey++;
 			if(posMultipleKey == tmp.size()) {
 				posMultipleKey = 0;
 			}
@@ -407,9 +432,11 @@ bool BNLJoin::isValid(void *right, void *left) {
 			result = false;
 		} else {
 			// find
+//			cout<<"intvalue "<<intValue<<endl;
 			vector<void *> tmp = mapInt[intValue];
 			result = true;
-			left = tmp[posMultipleKey++];
+			memcpy(left, tmp[posMultipleKey], MAX_TUPLE_SIZE);
+			posMultipleKey++;
 			if(posMultipleKey == tmp.size()) {
 				posMultipleKey = 0;
 			}
@@ -423,7 +450,8 @@ bool BNLJoin::isValid(void *right, void *left) {
 			// find
 			vector<void *> tmp = mapReal[realValue];
 			result = true;
-			left = tmp[posMultipleKey++];
+			memcpy(left, tmp[posMultipleKey], MAX_TUPLE_SIZE);
+			posMultipleKey++;
 			if(posMultipleKey == tmp.size()) {
 				posMultipleKey = 0;
 			}
@@ -435,7 +463,6 @@ bool BNLJoin::isValid(void *right, void *left) {
 
 RC BNLJoin::getNextBlock() {
 	RC rc = 0;
-	void *data = malloc(MAX_TUPLE_SIZE);
 	string stringValue;
 	int intValue;
 	float realValue;
@@ -444,6 +471,7 @@ RC BNLJoin::getNextBlock() {
 		// varchar
 		clearMap();
 		for(int i = 0; i < maxTuples; i++) {
+			void *data = malloc(MAX_TUPLE_SIZE);
 			rc = leftIn->getNextTuple(data);
 			getValue(true, data, stringValue, intValue, realValue);
 			if(rc != 0) {
@@ -451,9 +479,11 @@ RC BNLJoin::getNextBlock() {
 				if(i == 0) {
 					// not able to have a new block, finish
 					rc = -1;
+					free(data);
 					break;
 				} else {
 					// have a new block
+					free(data);
 					rc = 0;
 					break;
 				}
@@ -473,6 +503,7 @@ RC BNLJoin::getNextBlock() {
 		// int
 		clearMap();
 		for(int i = 0; i < maxTuples; i++) {
+			void *data = malloc(MAX_TUPLE_SIZE);
 			rc = leftIn->getNextTuple(data);
 			getValue(true, data, stringValue, intValue, realValue);
 			if(rc != 0) {
@@ -480,10 +511,12 @@ RC BNLJoin::getNextBlock() {
 				if(i == 0) {
 					// not able to have a new block, finish
 					rc = -1;
+					free(data);
 					break;
 				} else {
 					// have a new block
 					rc = 0;
+					free(data);
 					break;
 				}
 			} else {
@@ -502,6 +535,7 @@ RC BNLJoin::getNextBlock() {
 		// real
 		clearMap();
 		for(int i = 0; i < maxTuples; i++) {
+			void *data = malloc(MAX_TUPLE_SIZE);
 			rc = leftIn->getNextTuple(data);
 			getValue(true, data, stringValue, intValue, realValue);
 			if(rc != 0) {
@@ -509,10 +543,12 @@ RC BNLJoin::getNextBlock() {
 				if(i == 0) {
 					// not able to have a new block, finish
 					rc = -1;
+					free(data);
 					break;
 				} else {
 					// have a new block
 					rc = 0;
+					free(data);
 					break;
 				}
 			} else {
@@ -529,7 +565,6 @@ RC BNLJoin::getNextBlock() {
 		}
 	}
 
-//	free(data);
 	return rc;
 }
 
@@ -567,7 +602,7 @@ void BNLJoin::clearMap() {
 void BNLJoin::getValue(bool left, void *data, string &stringValue, int &intValue, float &realValue) {
 	int length;
 	void *target = malloc(MAX_TUPLE_SIZE);
-    if(!left) getOneAttr(rightAttrs, data, target, condition.rhsAttr, condition.rhsValue.type, length);
+    if(!left) getOneAttr(rightAttrs, right, target, condition.rhsAttr, condition.rhsValue.type, length);
     else getOneAttr(leftAttrs, data, target, condition.lhsAttr, condition.rhsValue.type, length);
     if(condition.rhsValue.type == TypeVarChar) {
 		// varchar
@@ -588,16 +623,16 @@ void BNLJoin::getValue(bool left, void *data, string &stringValue, int &intValue
 }
 
 
-RC BNLJoin::getNextRightTuple(void *data) {
+RC BNLJoin::getNextRightTuple() {
 	RC rc = 0;
-	rc = rightIn->getNextTuple(data);
+	rc = rightIn->getNextTuple(right);
 	if(rc != 0) {
 		// last tuple in right already got. Check if should get the next block
 		rc = getNextBlock();
 		if(rc == 0) {
 			// a new block
 			rightIn->setIterator();
-			rc = getNextRightTuple(data);
+			rc = getNextRightTuple();
 		}
 		// if rc == -1, join should finish
 	}
