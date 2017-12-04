@@ -216,6 +216,7 @@ class Filter : public Iterator {
         Iterator *input;
         Condition condition;
         AttrType type;
+        vector<Attribute> attrs;
 
         bool isValid(void *data);
         RC prepareRightValue(Value value, void *right, int &rightLength);

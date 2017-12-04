@@ -171,6 +171,7 @@ Filter::Filter(Iterator* input, const Condition &condition) {
 	this->input = input;
 	this->condition = condition;
 	this->type = condition.rhsValue.type;
+	input->getAttributes(attrs);
 }
 
 RC Filter::getNextTuple(void *data) {
@@ -188,24 +189,21 @@ RC Filter::getNextTuple(void *data) {
 bool Filter::isValid(void *data) {
 	bool isValid = false;
 	// get all attributes
-	vector<Attribute> attrs;
-	getAttributes(attrs);
 
 	void *left = malloc(PAGE_SIZE);
 	void *right = malloc(PAGE_SIZE);
 	int leftLength = 0, rightLength = 0;
-	getOneAttr(attrs, data, left, condition.lhsAttr, type, leftLength); // get everything about left
+	AttrType leftType;
+	getOneAttr(attrs, data, left, condition.lhsAttr, leftType, leftLength); // get everything about left
 
 	if(condition.bRhsIsAttr) {
 		// right-hand side is an attribute
-		AttrType rightType;
+		AttrType rightType; // no use
 		getOneAttr(attrs, data, right, condition.rhsAttr, rightType, rightLength);
-		if(rightType == type) {
-			isValid = compareValue(left, leftLength, right, rightLength, type, condition.op);
-		}
+		isValid = compareValue(left, leftLength, right, rightLength, type, condition.op);
 	} else {
 		// right-hand side is a value
-		if(condition.rhsValue.type == type && prepareRightValue(condition.rhsValue, right, rightLength) == 0) {
+		if(leftType == type && prepareRightValue(condition.rhsValue, right, rightLength) == 0) {
 			isValid = compareValue(left, leftLength, right, rightLength, type, condition.op);
 		}
 	}
@@ -216,10 +214,8 @@ bool Filter::isValid(void *data) {
 }
 
 
-
 RC Filter::prepareRightValue(Value value, void *right, int &rightLength) {
 	RC rc = 0;
-	AttrType type = value.type;
 	if(type == TypeVarChar) {
 		rightLength = *((int*)((char*)value.data));
 		memcpy(right, (char*)value.data + sizeof(int), rightLength);
@@ -233,7 +229,8 @@ RC Filter::prepareRightValue(Value value, void *right, int &rightLength) {
 
 
 void Filter::getAttributes(vector<Attribute> &attrs) const {
-	input->getAttributes(attrs);
+	attrs.clear();
+	attrs = this->attrs;
 }
 
 // *****Project starts here*****
