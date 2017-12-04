@@ -12,6 +12,7 @@ RC Iterator::getOneAttr(vector<Attribute> attrs, void *data, void *target, strin
 	vector<Attribute>::iterator iter;
 	for(iter = attrs.begin(); iter != attrs.end(); iter++) {
 		bool isNull = nullFieldsIndicator[i / 8] & (1 << (7 - i % 8));
+		i++;
 		if(!isNull) {
 			// not null
 			type = (*iter).type;
@@ -41,7 +42,6 @@ RC Iterator::getOneAttr(vector<Attribute> attrs, void *data, void *target, strin
 			}
 		}
 	}
-//	cout<<"get one attrs: rc "<<rc<<endl;
 	free(nullFieldsIndicator);
 	return rc;
 }
@@ -133,8 +133,6 @@ void Iterator::joinTwoTuples(vector<Attribute> leftAttrs, void *left, vector<Att
 	int nullFieldsIndicatorActualSizeLeft;
 	int leftLength;
 	lengthOfTuple(leftAttrs, left, nullFieldsIndicatorActualSizeLeft, leftLength);
-//	cout<<"left null "<<nullFieldsIndicatorActualSizeLeft<<endl;
-//	cout<<"left length "<<leftLength<<endl;
 	// right
 	int nullFieldsIndicatorActualSizeRight;
 	int rightLength;
@@ -370,7 +368,6 @@ RC BNLJoin::getNextTuple(void *data) {
 			} else {
 				if(isValid(left)) {
 					// find one but need to check if valid
-//					cout<<"find one, first time"<<endl;
 					rc = 0;
 					break;
 				}
@@ -385,18 +382,7 @@ RC BNLJoin::getNextTuple(void *data) {
 
 	// join two tuple
 	if(rc == 0) {
-		// check left and right
-//		int leftTestValue = *((int*)((char*)left + 5));
-//		int rightTestValue = *((int*)((char*)right + 1));
-//		cout<<"left value "<<leftTestValue<<endl;
-//		cout<<"right value "<<rightTestValue<<endl;
-
 		joinTwoTuples(leftAttrs, left, rightAttrs, right, data);
-//		// check join value
-//		int joinLeft = *((int*)((char*)data+5));
-//		int joinRight = *((int*)((char*)data+13));
-//		cout<<"join left " <<joinLeft<<endl;
-//		cout<<"join right "<<joinRight<<endl;
 	}
 
 	free(left);
@@ -432,7 +418,6 @@ bool BNLJoin::isValid(void *left) {
 			result = false;
 		} else {
 			// find
-//			cout<<"intvalue "<<intValue<<endl;
 			vector<void *> tmp = mapInt[intValue];
 			result = true;
 			memcpy(left, tmp[posMultipleKey], MAX_TUPLE_SIZE);

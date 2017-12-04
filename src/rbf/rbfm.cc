@@ -154,7 +154,7 @@ RC RBFM_ScanIterator::putPartOfAttrsInputData(void *data, void *space, RID rid)
 					if(attributeInRecordLength != 0)
 					{
 						// not null
-						nullFieldsIndicator[i / 8] = nullFieldsIndicator[i / 8] & (0 << (7 - i % 8));
+//						nullFieldsIndicator[i / 8] = nullFieldsIndicator[i / 8] & (0 << (7 - i % 8));
 						memcpy((char*)data + offsetData, &attributeInRecordLength, sizeof(int));
 						offsetData += sizeof(int);
 						memcpy((char*)data + offsetData, (char*)space + offsetTarget + offsetOldRecordData, attributeInRecordLength);
@@ -171,7 +171,7 @@ RC RBFM_ScanIterator::putPartOfAttrsInputData(void *data, void *space, RID rid)
 					if(attributeInRecordLength != 0)
 					{
 						// not null
-						nullFieldsIndicator[i / 8] = nullFieldsIndicator[i / 8] & (0 << (7 - i % 8));
+//						nullFieldsIndicator[i / 8] = nullFieldsIndicator[i / 8] & (0 << (7 - i % 8));
 						memcpy((char*)data + offsetData, (char*)space + offsetTarget + offsetOldRecordData, 4);
 						offsetData += 4;
 					}
