@@ -125,6 +125,8 @@ int testCase_10() {
 	}
 
 	if (expectedResultCnt != actualResultCnt) {
+		cout<<"expect "<<expectedResultCnt<<endl;
+		cout<<"actual "<<actualResultCnt<<endl;
 		cerr << "***** The number of returned tuple is not correct. *****" << endl;
 		rc = fail;
 	}

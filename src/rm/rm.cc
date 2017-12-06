@@ -962,10 +962,9 @@ RC RelationManager::indexScan(const string &tableName,
 			break;
 	}
 
-	IXFileHandle ixfh;
-	rc = ixm.openFile(indexName, rm_IndexScanIterator.ix_ScanIterator.ixfileHandle);
+	rc = ixm.openFile(indexName, this->ixfh);
 	if (rc != 0) return -12;
-	rc = ixm.scan(rm_IndexScanIterator.ix_ScanIterator.ixfileHandle, attr, lowKey, highKey, lowKeyInclusive, highKeyInclusive, rm_IndexScanIterator.ix_ScanIterator);
+	rc = ixm.scan(this->ixfh, attr, lowKey, highKey, lowKeyInclusive, highKeyInclusive, rm_IndexScanIterator.ix_ScanIterator);
 	if (rc != 0) return -12;
 
 	return rc;

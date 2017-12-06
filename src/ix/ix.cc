@@ -1597,12 +1597,12 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
 	void *space = malloc(PAGE_SIZE);
 	if (firstSearch) {
 		firstSearch = false;
-		int targetLeafPage = getToLeafPage(ixfileHandle.rootNum);
+		int targetLeafPage = getToLeafPage(ixfileHandle->rootNum);
 		if(targetLeafPage == -1) {
 			free(space);
 			return -1;
 		}
-		rc = ixfileHandle.readPage(targetLeafPage, space);
+		rc = ixfileHandle->readPage(targetLeafPage, space);
 		if(rc != 0) {
 			free(space);
 			return rc; // if readpage correct
@@ -1612,7 +1612,7 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
 	} else {
 		// check if professor deletes during scanning
 		// check current key's rid
-		ixfileHandle.readPage(pageNum, space);
+		ixfileHandle->readPage(pageNum, space);
 		if(slotNum != 0) {
 			short keyStart = *((short*)((char*)space + PAGE_SIZE - sizeof(short) * (3 + 2 * slotNum)));
 			short keyLength = *((short*)((char*)space + PAGE_SIZE - sizeof(short) * (2 + 2 * slotNum))) - 2 * USSIZE;
@@ -1636,7 +1636,7 @@ RC IX_ScanIterator::getNextEntry(RID &rid, void *key) {
 				keyFlag = 1;
 				break;
 			} else {
-				rc = ixfileHandle.readPage(siblingNum, space);
+				rc = ixfileHandle->readPage(siblingNum, space);
 				if(rc != 0) {
 					free(space);
 					return rc; // if readpage correct
@@ -1720,7 +1720,7 @@ int IX_ScanIterator::getToLeafPage(unsigned rootPage) {
 	unsigned currentPage = rootPage;
 	void *space = malloc(PAGE_SIZE);
 	while (true) {
-		RC rc = ixfileHandle.readPage(currentPage, space);
+		RC rc = ixfileHandle->readPage(currentPage, space);
 		if (rc != 0) {
 			free(space);
 			return rc;
@@ -1798,54 +1798,55 @@ RC IX_ScanIterator::prepare(IXFileHandle &ixfh, const Attribute &attribute,
 		const void *lowKey, const void *highKey, bool lowKeyInclusive,
 		bool highKeyInclusive) {
 	RC rc = 0;
-    ixfileHandle = ixfh;
-    this->attribute = attribute;
-    this->lowKey = lowKey;
-    this->highKey = highKey;
-    this->lowKeyInclusive = lowKeyInclusive;
-    this->highKeyInclusive = highKeyInclusive;
+	this->ixfileHandle = &ixfh;
+	this->attribute = attribute;
+	this->lowKey = lowKey;
+	this->highKey = highKey;
+	this->lowKeyInclusive = lowKeyInclusive;
+	this->highKeyInclusive = highKeyInclusive;
 
-    // make lowKey and highKey
-    if(attribute.type == TypeVarChar) {
-    		// varchar
-    		if(lowKey != NULL) {
-    			lowVarchar = "";
-    			int lowKeyLength = *((int*) ((char*) lowKey));
+	// make lowKey and highKey
+	if (attribute.type == TypeVarChar) {
+		// varchar
+		if (lowKey != NULL) {
+			lowVarchar = "";
+			int lowKeyLength = *((int*) ((char*) lowKey));
 			for (int j = 0; j < lowKeyLength; j++) {
 				lowVarchar += *((char*) lowKey + USSIZE + j);
 			}
-    		}
-    		if(highKey != NULL) {
-    			highVarchar = "";
-    			int highKeyLength = *((int*) ((char*) highKey));
+		}
+		if (highKey != NULL) {
+			highVarchar = "";
+			int highKeyLength = *((int*) ((char*) highKey));
 			for (int j = 0; j < highKeyLength; j++) {
 				highVarchar += *((char*) highKey + USSIZE + j);
 			}
-    		}
+		}
 
-    } else if(attribute.type == TypeInt) {
-    		// int
-    		if(lowKey != NULL) {
-    			lowInt = *((int*) ((char*) lowKey));
-    		}
-    		if(highKey != NULL) {
-    			highInt = *((int*) ((char*) highKey));
-    		}
-    } else {
-    		// real
-    		if(lowKey != NULL) {
+	} else if (attribute.type == TypeInt) {
+		// int
+		if (lowKey != NULL) {
+			lowInt = *((int*) ((char*) lowKey));
+		}
+		if (highKey != NULL) {
+			highInt = *((int*) ((char*) highKey));
+		}
+	} else {
+		// real
+		if (lowKey != NULL) {
 			lowReal = *((float*) ((char*) lowKey));
-    		}
-    		if(highKey != NULL) {
-    			highReal = *((float*) ((char*) highKey));
-    		}
-    }
+		}
+		if (highKey != NULL) {
+			highReal = *((float*) ((char*) highKey));
+		}
+	}
 
     return rc;
 }
 
 RC IX_ScanIterator::close() {
-//	fclose(ixfileHandle.fp);
+//	if (ixfileHandle->fp != NULL)
+//		fclose(ixfileHandle->fp);
 	return 0;
 }
 
@@ -1966,8 +1967,8 @@ RC IXPagedFileManager::openIXFile(const string &fileName,
 	if (ixfileHandle.fp == NULL) {
 		return -1; // file not exists
 	} else {
-		if (!ixfileHandle.fileName.empty()) {
-			return -1; // file still opened
+		if (false) {
+//			return -1; // file still opened
 		} else {
 			// put counters into memory
 			ixfileHandle.fileName = fileName;

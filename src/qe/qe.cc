@@ -651,10 +651,12 @@ INLJoin::INLJoin(Iterator *leftIn, IndexScan *rightIn, const Condition &conditio
 	rightIn->getAttributes(rightAttrs);
 	joinTwoAttributes(leftAttrs, rightAttrs, joinedAttrs);
 	type = condition.rhsValue.type;
+	leftTargetAttr = malloc(MAX_TUPLE_SIZE);
 }
 
 INLJoin::~INLJoin() {
 	free(left);
+	free(leftTargetAttr);
 }
 
 RC INLJoin::getNextTuple(void *data) {
@@ -683,7 +685,7 @@ RC INLJoin::getNextTuple(void *data) {
 		if(rc != 0) {
 			getRightTupleFinish = true; // right finishes for this left
 		} else {
-			this->joinTwoTuples(leftAttrs, left, rightAttrs, right, data);
+			this->joinTwoTuples(leftAttrs, left, rightAttrs, right, data); // output data
 			break;
 		}
 	}
@@ -694,30 +696,28 @@ RC INLJoin::getNextTuple(void *data) {
 
 RC INLJoin::rightTupleToFirst(void *left) {
 	RC rc = 0;
-	void *target = malloc(MAX_TUPLE_SIZE); // target to setIterator
 	int length = 0;
-	AttrType leftType; // not use in fact
+	AttrType leftType; // used in fact
 
-	this->getOneAttr(leftAttrs, left, target, condition.lhsAttr, leftType, length);
+	this->getOneAttr(leftAttrs, left, leftTargetAttr, condition.lhsAttr, leftType, length);
 	if(length != -1) {
 		// attribute in this left is not null
 		// if varchar, put 4 bytes before data
 		if(leftType == TypeVarChar) {
 			void *tmp = malloc(MAX_TUPLE_SIZE);
 			memset(tmp, 0, MAX_TUPLE_SIZE);
-			memcpy(tmp, target, length);
+			memcpy(tmp, leftTargetAttr, length);
 
 			// set varchar's target
-			memcpy(target, &length, sizeof(int));
-			memcpy((char*)target + sizeof(int), tmp, length);
+			memcpy(leftTargetAttr, &length, sizeof(int));
+			memcpy((char*)leftTargetAttr + sizeof(int), tmp, length);
 			free(tmp);
 		}
-		rightIn->setIterator(target, target, true, true); // set up scan in right
+		rightIn->setIterator(leftTargetAttr, leftTargetAttr, true, true); // set up scan in right
 	} else {
 		rc = -1;
 	}
 
-	free(target);
 	return rc;
 }
 
@@ -725,4 +725,97 @@ RC INLJoin::rightTupleToFirst(void *left) {
 void INLJoin::getAttributes(vector<Attribute> &attrs) const {
 	attrs.clear();
 	attrs = this->joinedAttrs;
+}
+
+//*****Aggregate starts here*****
+Aggregate::Aggregate(Iterator *input, Attribute aggAttr, AggregateOp op) {
+	this->attr = aggAttr;
+	this->op = op;
+	this->iter = input;
+	iter->getAttributes(this->attrs);
+	this->firstTime = true;
+	this->min = 0;
+	this->max = 0;
+	this->sum = 0;
+	this->avg = 0;
+	this->count = 0;
+}
+
+
+RC Aggregate::getNextTuple(void *data) {
+	if (!firstTime)
+		return QE_EOF;
+	else
+		firstTime = false;
+
+	RC rc = 0;
+	void* entry = malloc(PAGE_SIZE);
+	if (entry == NULL) cerr << "malloc() failed" << endl;
+	memset(entry, 0, PAGE_SIZE);
+	void* target = malloc(PAGE_SIZE);
+	if (target == NULL) cerr << "malloc() failed" << endl;
+	memset(target, 0, PAGE_SIZE);
+
+	int length = 0;
+	float value = 0;
+
+	while (this->iter->getNextTuple(entry) != EOF) {
+		rc = this->iter->getOneAttr(this->attrs, entry, target, this->attr.name, this->attr.type, length);
+		if (rc != 0) cerr << "getOneAttr() failed" << endl;
+		count += 1.0;
+		if (attr.type != TypeVarChar) {
+			if (attr.type == TypeInt)
+				value = (float)(*(int*)target);
+			else
+				value = *(float*)target;
+
+			sum += value;
+			avg = 1.0 * sum / count;
+			if (min > value)
+				min = value;
+			if (max < value)
+				max = value;
+		}
+	}
+
+	char ch = 0;
+	memcpy(data, &ch, 1);
+
+	if (this->op == MIN)
+		memcpy((char*)data + 1, &min, sizeof(float));
+	else if (this->op == MAX)
+		memcpy((char*)data + 1, &max, sizeof(float));
+	else if (this->op == SUM)
+		memcpy((char*)data + 1, &sum, sizeof(float));
+	else if (this->op == AVG)
+		memcpy((char*)data + 1, &avg, sizeof(float));
+	else if (this->op == COUNT)
+		memcpy((char*)data + 1, &count, sizeof(float));
+	else cerr << "op error1" << endl;
+
+	free(entry);
+	free(target);
+}
+
+
+void Aggregate::getAttributes(vector<Attribute> &attrs) const {
+	Attribute tmp;
+	string s = "";
+	if (this->op == MIN)
+		s += "MIN";
+	else if (this->op == MAX)
+		s += "MAX";
+	else if (this->op == SUM)
+		s += "SUM";
+	else if (this->op == AVG)
+		s += "AVG";
+	else if (this->op == COUNT)
+		s += "COUNT";
+	else cerr << "op error2" << endl;
+
+	s += "(" + this->attr.name + ")";
+	tmp.name = s;
+	tmp.type = TypeReal;
+	tmp.length = sizeof(float);
+	attrs.push_back(tmp);
 }
