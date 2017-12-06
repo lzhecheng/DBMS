@@ -303,8 +303,12 @@ class INLJoin : public Iterator {
         bool getRightTupleFinish;
         void *left;
 <<<<<<< HEAD
+<<<<<<< HEAD
         AttrType type;
         void *leftTargetAttr;
+=======
+//        void *leftKey;
+>>>>>>> parent of 76be3de... Some small fixed
 =======
 //        void *leftKey;
 >>>>>>> parent of 76be3de... Some small fixed

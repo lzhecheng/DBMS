@@ -638,8 +638,13 @@ INLJoin::INLJoin(Iterator *leftIn, IndexScan *rightIn, const Condition &conditio
 	leftIn->getAttributes(rightAttrs);
 	joinTwoAttributes(leftAttrs, rightAttrs, joinedAttrs);
 <<<<<<< HEAD
+<<<<<<< HEAD
 	type = condition.rhsValue.type;
 	leftTargetAttr = malloc(MAX_TUPLE_SIZE);
+=======
+
+
+>>>>>>> parent of 76be3de... Some small fixed
 =======
 
 
@@ -668,8 +673,12 @@ RC INLJoin::getNextTuple(void *data) {
 			rc = this->getNextTuple(data);
 		} else {
 <<<<<<< HEAD
+<<<<<<< HEAD
 			this->joinTwoTuples(leftAttrs, left, rightAttrs, right, data); // output data
 			break;
+=======
+			this->joinTwoTuples(leftAttrs, left, rightAttrs, right, data);
+>>>>>>> parent of 76be3de... Some small fixed
 =======
 			this->joinTwoTuples(leftAttrs, left, rightAttrs, right, data);
 >>>>>>> parent of 76be3de... Some small fixed
@@ -680,6 +689,7 @@ RC INLJoin::getNextTuple(void *data) {
 	return rc;
 }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 RC INLJoin::rightTupleToFirst(void *left) {
 	RC rc = 0;
@@ -722,12 +732,29 @@ void INLJoin::rightTupleToFirst(void *left) {
 	rightIn->setIterator(target, target, true, true);
 	free(target);
 >>>>>>> parent of 76be3de... Some small fixed
+=======
+void INLJoin::rightTupleToFirst(void *left) {
+	void *target = malloc(MAX_TUPLE_SIZE);
+	int length = 0;
+	this->getOneAttr(leftAttrs, left, target, condition.lhsAttr, condition.rhsValue.type, length);
+	// if varchar, put 4 bytes before data
+	if(condition.rhsValue.type == TypeVarChar) {
+		void *tmp = malloc(MAX_TUPLE_SIZE);
+		memcpy(tmp, target, length);
+		memcpy((char*)target + sizeof(int), tmp, length);
+		memcpy(target, &length, sizeof(int));
+		free(tmp);
+	}
+	rightIn->setIterator(target, target, true, true);
+	free(target);
+>>>>>>> parent of 76be3de... Some small fixed
 }
 
 
 void INLJoin::getAttributes(vector<Attribute> &attrs) const {
 	attrs.clear();
 	attrs = joinedAttrs;
+<<<<<<< HEAD
 }
 
 //*****Aggregate starts here*****
@@ -821,4 +848,6 @@ void Aggregate::getAttributes(vector<Attribute> &attrs) const {
 	tmp.type = TypeReal;
 	tmp.length = sizeof(float);
 	attrs.push_back(tmp);
+=======
+>>>>>>> parent of 76be3de... Some small fixed
 }
