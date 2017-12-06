@@ -164,7 +164,7 @@ class IX_ScanIterator {
         		const void *lowKey, const void *highKey, bool lowKeyInclusive,
         		bool highKeyInclusive);
 
-        IXFileHandle* ixfileHandle;
+        IXFileHandle ixfileHandle;
         Attribute attribute;
         const void *lowKey;
 		const void *highKey;

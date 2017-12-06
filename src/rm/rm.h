@@ -124,7 +124,6 @@ private:
     static RelationManager* _rm;
     RecordBasedFileManager rbfm;
     IndexManager ixm;
-    IXFileHandle ixfh;
 };
 
 #endif

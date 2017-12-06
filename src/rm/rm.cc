@@ -179,6 +179,7 @@ void RelationManager::createIndexName(string& indexName, const string &tableName
 
 
 bool RelationManager::hasIndex(RelationManager rm, const string& tableName, const string& attrName) {
+
 	RC rc = 0;
 	string indexName;
 	createIndexName(indexName, tableName, attrName);
@@ -191,31 +192,19 @@ bool RelationManager::hasIndex(RelationManager rm, const string& tableName, cons
 	int length = indexName.length();
 	void* name = malloc(length + 4);
 	if (name == NULL) cerr << "malloc() failed" << endl;
-	memset(name, 0, length + 4);
+	memset(name, 0, length + sizeof(int));
 	memcpy(name, &length, sizeof(int));
 	const char *cstr = indexName.c_str();
-	for(int i = 0; i < length; i++)
-	{
-		memcpy((char*)name + sizeof(int) + i, (char*)cstr + i, 1);
-	}
-	rc = rm.scan("Tables", "table-name", EQ_OP, name, RD_id, rm_ScanIterator);
-	if (rc != 0) cerr << "scan() failed" << endl;
 
-	void* data = malloc(PAGE_SIZE);
-	if (data == NULL) cerr << "malloc() failed" << endl;
-	memset(data, 0, PAGE_SIZE);
-	rc = rm_ScanIterator.getNextTuple(rid, data);
-	if (rc == 0) {
-		rm_ScanIterator.close();
-		free(data);
-		free(name);
-		return true;
+	FILE* fp = fopen(cstr, "rb+");
+	if (fp == NULL) {
+		return false;
 	}
+	else {
+		fclose(fp);
+	}
+	return true;
 
-	rm_ScanIterator.close();
-	free(data);
-	free(name);
-	return false;
 }
 
 
@@ -877,6 +866,8 @@ RC RelationManager::createIndex(const string &tableName, const string &attrName)
     	memcpy(key, (char*)entry + 1, PAGE_SIZE - 1);
     	ixm.insertEntry(ixfh, attr, key, rid);
     }
+    rc = rm_ScanIterator.close();
+    if (rc != 0) return -12;
 
     ixm.closeFile(ixfh);
     free(entry);
@@ -962,9 +953,10 @@ RC RelationManager::indexScan(const string &tableName,
 			break;
 	}
 
-	rc = ixm.openFile(indexName, this->ixfh);
+	IXFileHandle ixfh;
+	rc = ixm.openFile(indexName, ixfh);
 	if (rc != 0) return -12;
-	rc = ixm.scan(this->ixfh, attr, lowKey, highKey, lowKeyInclusive, highKeyInclusive, rm_IndexScanIterator.ix_ScanIterator);
+	rc = ixm.scan(ixfh, attr, lowKey, highKey, lowKeyInclusive, highKeyInclusive, rm_IndexScanIterator.ix_ScanIterator);
 	if (rc != 0) return -12;
 
 	return rc;

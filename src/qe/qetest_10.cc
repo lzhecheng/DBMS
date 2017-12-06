@@ -117,7 +117,7 @@ int testCase_10() {
 			goto clean_up;
 		}
 		// Print right.D
-		cerr << "  right.D " << *(int *) ((char *) data + offset + 1);
+		cerr << "  right.D " << *(int *) ((char *) data + offset + 1) << endl;;
 		offset += sizeof(int);
 
 		memset(data, 0, bufSize);
@@ -125,8 +125,6 @@ int testCase_10() {
 	}
 
 	if (expectedResultCnt != actualResultCnt) {
-		cout<<"expect "<<expectedResultCnt<<endl;
-		cout<<"actual "<<actualResultCnt<<endl;
 		cerr << "***** The number of returned tuple is not correct. *****" << endl;
 		rc = fail;
 	}
