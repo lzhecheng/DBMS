@@ -164,8 +164,6 @@ void Iterator::lengthOfTuple(vector<Attribute> attrs, void *data, int &nullindic
 	}
 	nullindicatorLength = nullFieldsIndicatorActualSize;
 	length = tLength - nullFieldsIndicatorActualSize;
-
-	free(nullFieldsIndicator);
 }
 
 // *****Filter starts here*****
@@ -189,27 +187,24 @@ RC Filter::getNextTuple(void *data) {
 }
 
 bool Filter::isValid(void *data) {
-	RC rc = 0;
 	bool isValid = false;
 	// get all attributes
 
 	void *left = malloc(PAGE_SIZE);
 	void *right = malloc(PAGE_SIZE);
-	int leftLength = 0;
-	int rightLength = 0;
+	int leftLength = 0, rightLength = 0;
 	AttrType leftType;
-	rc = getOneAttr(attrs, data, left, condition.lhsAttr, leftType, leftLength); // get everything about left
-	if(rc == 0) {
-		if(condition.bRhsIsAttr) {
-			// right-hand side is an attribute
-			AttrType rightType; // no use
-			getOneAttr(attrs, data, right, condition.rhsAttr, rightType, rightLength);
+	getOneAttr(attrs, data, left, condition.lhsAttr, leftType, leftLength); // get everything about left
+
+	if(condition.bRhsIsAttr) {
+		// right-hand side is an attribute
+		AttrType rightType; // no use
+		getOneAttr(attrs, data, right, condition.rhsAttr, rightType, rightLength);
+		isValid = compareValue(left, leftLength, right, rightLength, type, condition.op);
+	} else {
+		// right-hand side is a value
+		if(leftType == type && prepareRightValue(condition.rhsValue, right, rightLength) == 0) {
 			isValid = compareValue(left, leftLength, right, rightLength, type, condition.op);
-		} else {
-			// right-hand side is a value
-			if(leftType == type && prepareRightValue(condition.rhsValue, right, rightLength) == 0) {
-				isValid = compareValue(left, leftLength, right, rightLength, type, condition.op);
-			}
 		}
 	}
 
@@ -331,8 +326,6 @@ RC Project::pickAttrs(void *data) {
 	memcpy(space, nullFieldsIndicatorSpace, nullFieldsIndicatorActualSizeSpace);
 	memcpy(data, space, spaceOffset);
 
-	free(nullFieldsIndicatorData);
-	free(nullFieldsIndicatorSpace);
 	free(space);
 	return rc;
 }
@@ -462,6 +455,7 @@ RC BNLJoin::getNextBlock() {
 		for(int i = 0; i < maxTuples; i++) {
 			void *data = malloc(MAX_TUPLE_SIZE);
 			rc = leftIn->getNextTuple(data);
+			getValue(true, data, stringValue, intValue, realValue);
 			if(rc != 0) {
 				// no more tuple in left
 				if(i == 0) {
@@ -476,7 +470,6 @@ RC BNLJoin::getNextBlock() {
 					break;
 				}
 			} else {
-				getValue(true, data, stringValue, intValue, realValue);
 				if(mapVarchar.find(stringValue) != mapVarchar.end()) {
 					// key exists
 					mapVarchar[stringValue].push_back(data);
@@ -494,6 +487,7 @@ RC BNLJoin::getNextBlock() {
 		for(int i = 0; i < maxTuples; i++) {
 			void *data = malloc(MAX_TUPLE_SIZE);
 			rc = leftIn->getNextTuple(data);
+			getValue(true, data, stringValue, intValue, realValue);
 			if(rc != 0) {
 				// no more tuple in left
 				if(i == 0) {
@@ -508,7 +502,6 @@ RC BNLJoin::getNextBlock() {
 					break;
 				}
 			} else {
-				getValue(true, data, stringValue, intValue, realValue);
 				if(mapInt.find(intValue) != mapInt.end()) {
 					// key exists
 					mapInt[intValue].push_back(data);
@@ -526,6 +519,7 @@ RC BNLJoin::getNextBlock() {
 		for(int i = 0; i < maxTuples; i++) {
 			void *data = malloc(MAX_TUPLE_SIZE);
 			rc = leftIn->getNextTuple(data);
+			getValue(true, data, stringValue, intValue, realValue);
 			if(rc != 0) {
 				// no more tuple in left
 				if(i == 0) {
@@ -540,7 +534,6 @@ RC BNLJoin::getNextBlock() {
 					break;
 				}
 			} else {
-				getValue(true, data, stringValue, intValue, realValue);
 				if(mapReal.find(realValue) != mapReal.end()) {
 					// key exists
 					mapReal[realValue].push_back(data);
@@ -589,7 +582,7 @@ void BNLJoin::clearMap() {
 }
 
 void BNLJoin::getValue(bool left, void *data, string &stringValue, int &intValue, float &realValue) {
-	int length = 0;
+	int length;
 	void *target = malloc(MAX_TUPLE_SIZE);
     if(!left) getOneAttr(rightAttrs, right, target, condition.rhsAttr, condition.rhsValue.type, length);
     else getOneAttr(leftAttrs, data, target, condition.lhsAttr, condition.rhsValue.type, length);
@@ -614,23 +607,17 @@ void BNLJoin::getValue(bool left, void *data, string &stringValue, int &intValue
 
 RC BNLJoin::getNextRightTuple() {
 	RC rc = 0;
-	while(true) {
-		rc = rightIn->getNextTuple(right);
+	rc = rightIn->getNextTuple(right);
+	if(rc != 0) {
+		// last tuple in right already got. Check if should get the next block
+		rc = getNextBlock();
 		if(rc == 0) {
-			break;
-		} else {
-			// right used up
-			rc = getNextBlock();
-			if(rc != 0) {
-				// left used up, finally finish
-				break;
-			} else {
-				// a next left block, set right iterator
-				rightIn->setIterator();
-			}
+			// a new block
+			rightIn->setIterator();
+			rc = getNextRightTuple();
 		}
+		// if rc == -1, join should finish
 	}
-
 	return rc;
 }
 
@@ -648,10 +635,15 @@ INLJoin::INLJoin(Iterator *leftIn, IndexScan *rightIn, const Condition &conditio
 	left = malloc(MAX_TUPLE_SIZE);
 
 	leftIn->getAttributes(leftAttrs);
-	rightIn->getAttributes(rightAttrs);
+	leftIn->getAttributes(rightAttrs);
 	joinTwoAttributes(leftAttrs, rightAttrs, joinedAttrs);
+<<<<<<< HEAD
 	type = condition.rhsValue.type;
 	leftTargetAttr = malloc(MAX_TUPLE_SIZE);
+=======
+
+
+>>>>>>> parent of 76be3de... Some small fixed
 }
 
 INLJoin::~INLJoin() {
@@ -663,30 +655,24 @@ RC INLJoin::getNextTuple(void *data) {
 	RC rc = 0;
 	void *right = malloc(MAX_TUPLE_SIZE);
 
-	while(true) {
-		// if getNextTuple in right finished, then start from the first in right
-		if(getRightTupleFinish) {
-			rc = leftIn->getNextTuple(left);
-			if(rc != 0) {
-				break; // if rc == -1, whole scan finishes
-			} else {
-				// set right's iterator and right starts from beginning
-				if(this->rightTupleToFirst(left) == -1) {
-					// current attribute in left is null and need to get next left
-					continue;
-				} else {
-					getRightTupleFinish = false;
-				}
-			}
-		}
-
-		// try to get next right tuple
+	if(getRightTupleFinish) {
+		rc = leftIn->getNextTuple(left);
+		this->rightTupleToFirst(left);
+		getRightTupleFinish = false;
+	}
+	if(rc != -1) {
 		rc = rightIn->getNextTuple(right);
-		if(rc != 0) {
-			getRightTupleFinish = true; // right finishes for this left
+		if(rc == -1) {
+			// rightNextTuple finished this time
+			getRightTupleFinish = true;
+			rc = this->getNextTuple(data);
 		} else {
+<<<<<<< HEAD
 			this->joinTwoTuples(leftAttrs, left, rightAttrs, right, data); // output data
 			break;
+=======
+			this->joinTwoTuples(leftAttrs, left, rightAttrs, right, data);
+>>>>>>> parent of 76be3de... Some small fixed
 		}
 	}
 
@@ -694,6 +680,7 @@ RC INLJoin::getNextTuple(void *data) {
 	return rc;
 }
 
+<<<<<<< HEAD
 RC INLJoin::rightTupleToFirst(void *left) {
 	RC rc = 0;
 	int length = 0;
@@ -719,12 +706,28 @@ RC INLJoin::rightTupleToFirst(void *left) {
 	}
 
 	return rc;
+=======
+void INLJoin::rightTupleToFirst(void *left) {
+	void *target = malloc(MAX_TUPLE_SIZE);
+	int length = 0;
+	this->getOneAttr(leftAttrs, left, target, condition.lhsAttr, condition.rhsValue.type, length);
+	// if varchar, put 4 bytes before data
+	if(condition.rhsValue.type == TypeVarChar) {
+		void *tmp = malloc(MAX_TUPLE_SIZE);
+		memcpy(tmp, target, length);
+		memcpy((char*)target + sizeof(int), tmp, length);
+		memcpy(target, &length, sizeof(int));
+		free(tmp);
+	}
+	rightIn->setIterator(target, target, true, true);
+	free(target);
+>>>>>>> parent of 76be3de... Some small fixed
 }
 
 
 void INLJoin::getAttributes(vector<Attribute> &attrs) const {
 	attrs.clear();
-	attrs = this->joinedAttrs;
+	attrs = joinedAttrs;
 }
 
 //*****Aggregate starts here*****

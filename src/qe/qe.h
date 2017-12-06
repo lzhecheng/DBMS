@@ -302,14 +302,18 @@ class INLJoin : public Iterator {
         Condition condition;
         bool getRightTupleFinish;
         void *left;
+<<<<<<< HEAD
         AttrType type;
         void *leftTargetAttr;
+=======
+//        void *leftKey;
+>>>>>>> parent of 76be3de... Some small fixed
 
         vector<Attribute> leftAttrs;
         vector<Attribute> rightAttrs;
         vector<Attribute> joinedAttrs;
 
-        RC rightTupleToFirst(void *left);
+        void rightTupleToFirst(void *left);
 };
 
 // Optional for everyone. 10 extra-credit points
