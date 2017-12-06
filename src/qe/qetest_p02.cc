@@ -102,6 +102,7 @@ RC privateTestCase_2() {
 
 		memset(data1, 0, bufSize);
 		memset(data2, 0, bufSize);
+		
 		count++;
 	}
 

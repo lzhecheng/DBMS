@@ -157,7 +157,7 @@ void Iterator::lengthOfTuple(vector<Attribute> attrs, void *data, int &nullindic
 	memcpy(nullFieldsIndicator, data, nullFieldsIndicatorActualSize);
 
 	int tLength = nullFieldsIndicatorActualSize;
-	for(int i = 0; i < attrs.size(); i++) {
+	for(unsigned i = 0; i < attrs.size(); i++) {
 		if((nullFieldsIndicator[i / 8] & (1 << (7 - i % 8))) == 0) {
 			tLength += (attrs.at(i).type == TypeVarChar) ? *((int*)((char*)left + tLength)) + sizeof(int) : sizeof(int);
 		}

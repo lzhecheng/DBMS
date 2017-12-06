@@ -1382,7 +1382,7 @@ int IndexManager::trueDelete(IXFileHandle &ixfileHandle, const Attribute &attrib
 	// update keyNumber and freeSpace
 	keyNumber -= 1;
 	memcpy((char*) space + PAGE_SIZE - 3 * sizeof(short), &keyNumber, sizeof(short));
-	freeSpace -= (totalKeysCompact + totalDirectoryCompact);
+	freeSpace += (totalKeysCompact + totalDirectoryCompact);
 	memcpy((char*) space + PAGE_SIZE - 2 * sizeof(short), &freeSpace, sizeof(short));
 
 	ixfileHandle.writePage(entryRID.pageNum, space);

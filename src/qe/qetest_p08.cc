@@ -58,10 +58,10 @@ RC privateTestCase_8() {
 	cond.rhsAttr = "rightvarchar.B";
 
 	Condition cond2;
-	cond.lhsAttr = "leftvarchar.A"; // [20 - 45]
-	cond.op = EQ_OP;
-	cond.bRhsIsAttr = true;
-	cond.rhsAttr = "left.A"; // [0 - 99]
+	cond2.lhsAttr = "leftvarchar.A"; // [20 - 45]
+	cond2.op = EQ_OP;
+	cond2.bRhsIsAttr = true;
+	cond2.rhsAttr = "left.A"; // [0 - 99]
 
 	int expectedResultCnt = 26; 
 	int actualResultCnt = 0;
