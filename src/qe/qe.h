@@ -2,6 +2,7 @@
 #define _qe_h_
 
 #include <vector>
+#include <iostream>
 #include <unordered_map>
 
 #include "../rbf/rbfm.h"
@@ -303,7 +304,6 @@ class INLJoin : public Iterator {
         bool getRightTupleFinish;
         void *left;
         AttrType type;
-        void *target;
 
         vector<Attribute> leftAttrs;
         vector<Attribute> rightAttrs;
@@ -361,6 +361,5 @@ class Aggregate : public Iterator {
         bool firstTime;
         float min, max, sum, avg, count;
 };
-
 
 #endif

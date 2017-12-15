@@ -651,12 +651,10 @@ INLJoin::INLJoin(Iterator *leftIn, IndexScan *rightIn, const Condition &conditio
 	rightIn->getAttributes(rightAttrs);
 	joinTwoAttributes(leftAttrs, rightAttrs, joinedAttrs);
 	type = condition.rhsValue.type;
-	target = malloc(MAX_TUPLE_SIZE);
 }
 
 INLJoin::~INLJoin() {
 	free(left);
-	free(target);
 }
 
 RC INLJoin::getNextTuple(void *data) {
@@ -696,10 +694,10 @@ RC INLJoin::getNextTuple(void *data) {
 
 RC INLJoin::rightTupleToFirst(void *left) {
 	RC rc = 0;
+	void *target = malloc(MAX_TUPLE_SIZE); // target to setIterator
 	int length = 0;
 	AttrType leftType; // not use in fact
 
-	memset(target, 0, MAX_TUPLE_SIZE);
 	this->getOneAttr(leftAttrs, left, target, condition.lhsAttr, leftType, length);
 	if(length != -1) {
 		// attribute in this left is not null
@@ -719,6 +717,7 @@ RC INLJoin::rightTupleToFirst(void *left) {
 		rc = -1;
 	}
 
+	free(target);
 	return rc;
 }
 
@@ -727,6 +726,7 @@ void INLJoin::getAttributes(vector<Attribute> &attrs) const {
 	attrs.clear();
 	attrs = this->joinedAttrs;
 }
+
 
 
 Aggregate::Aggregate(Iterator *input, Attribute aggAttr, AggregateOp op) {
@@ -746,8 +746,6 @@ Aggregate::Aggregate(Iterator *input, Attribute aggAttr, AggregateOp op) {
 RC Aggregate::getNextTuple(void *data) {
 	if (!firstTime)
 		return QE_EOF;
-	else
-		firstTime = false;
 
 	RC rc = 0;
 	void* entry = malloc(PAGE_SIZE);
@@ -772,6 +770,13 @@ RC Aggregate::getNextTuple(void *data) {
 
 			sum += value;
 			avg = 1.0 * sum / count;
+
+			if (firstTime) {
+				max = value;
+				min = value;
+				firstTime = false;
+			}
+
 			if (min > value)
 				min = value;
 			if (max < value)
@@ -796,6 +801,7 @@ RC Aggregate::getNextTuple(void *data) {
 
 	free(entry);
 	free(target);
+	return rc;
 }
 
 
@@ -820,3 +826,4 @@ void Aggregate::getAttributes(vector<Attribute> &attrs) const {
 	tmp.length = sizeof(float);
 	attrs.push_back(tmp);
 }
+
