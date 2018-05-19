@@ -1,5 +1,5 @@
 # DBMS
-This is a project of CS222p in UCI. There are 4 parts of it.
+This is a project to structure a relational database. There are 4 parts of it.
 ## 1 Record-Based File Manager (RBF)
 
 ## 2 Relation Manager (RM)
